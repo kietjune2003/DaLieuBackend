@@ -38,7 +38,7 @@ public class User extends BaseEntity implements UserDetails {
     private String name;
 
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
-    @Column(length = 255) // cho phép null nếu đăng nhập mạng xã hội
+    @Column(length = 255)
     private String password;
 
     @Column(length = 10)
