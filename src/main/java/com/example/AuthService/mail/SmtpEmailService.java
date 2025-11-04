@@ -3,6 +3,7 @@ package com.example.AuthService.mail;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 import jakarta.mail.internet.MimeMessage;
 
 @Service
+@Profile("!pro")
 @RequiredArgsConstructor
 public class SmtpEmailService implements EmailService {
     private final JavaMailSender mailSender;
