@@ -2,6 +2,8 @@ package com.example.AuthService.otp;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+
 import java.time.LocalDateTime;
 
 @Entity
@@ -24,20 +26,25 @@ public class EmailOtp {
     private OtpType type;           // REGISTER | RESET_PASSWORD
 
     @Column(nullable=false, length=10)
-    private String code;            // ví dụ 6 chữ số
+    private String code;
+
+    // NEW: thời điểm phát hành OTP
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false,
+            columnDefinition = "datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)")
+    private LocalDateTime createdAt;
 
     @Column(nullable=false)
     private LocalDateTime expiresAt;
 
     @Builder.Default
     @Column(nullable=false)
-    private int attempts = 0;       // số lần nhập
+    private int attempts = 0;
 
     @Builder.Default
     @Column(nullable=false)
     private boolean used = false;
 
-    // Dùng để lưu metadata tạm (VD: hash password lúc đăng ký)
     @Lob
-    private String payloadJson;     // optional (JSON)
+    private String payloadJson; // optional
 }

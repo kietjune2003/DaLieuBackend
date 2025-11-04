@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -24,7 +25,7 @@ public class OtpService {
     private final ObjectMapper mapper = new ObjectMapper();
     private final SecureRandom rnd = new SecureRandom();
 
-    // Khoá theo (type + email) để chặn xử lý song song trong cùng JVM
+    // Khoá theo (type + email) để chống 2 request đồng thời trong cùng JVM
     private final ConcurrentMap<String, ReentrantLock> locks = new ConcurrentHashMap<>();
 
     private String genCode() {
@@ -32,35 +33,37 @@ public class OtpService {
         return String.valueOf(n);
     }
 
+    private LocalDateTime nowUtc() {
+        return LocalDateTime.now(ZoneOffset.UTC);
+    }
+
     public void sendOtp(String email, OtpType type, Optional<Map<String, Object>> payloadOpt) {
         final String key = type + ":" + email;
         final ReentrantLock lock = locks.computeIfAbsent(key, k -> new ReentrantLock());
         lock.lock();
         try {
-            final LocalDateTime now = LocalDateTime.now();
+            final LocalDateTime now = nowUtc();
 
-            // TTL theo loại OTP
-            final int ttl = (type == OtpType.REGISTER)
-                    ? props.getRegisterTtlSeconds()
+            final int ttl = (type == OtpType.REGISTER) ? props.getRegisterTtlSeconds()
                     : props.getResetTtlSeconds();
-
             final int cooldown = props.getResendCooldownSeconds();
 
-            // Tìm OTP chưa dùng và còn hạn
             var lastOpt = repo.findFirstByEmailAndTypeAndUsedFalseAndExpiresAtAfterOrderByIdDesc(email, type, now);
             if (lastOpt.isPresent()) {
                 var last = lastOpt.get();
 
-                // Tính thời điểm phát hành gần nhất: issuedAt = expiresAt - TTL
-                var issuedAt = last.getExpiresAt().minusSeconds(ttl);
-                long elapsed = Duration.between(issuedAt, now).getSeconds();
+                // Ưu tiên createdAt; fallback sang (expiresAt - TTL) nếu bản ghi cũ chưa có createdAt
+                LocalDateTime issuedAt = (last.getCreatedAt() != null)
+                        ? last.getCreatedAt()
+                        : last.getExpiresAt().minusSeconds(ttl);
 
-                // 1) Idempotent window: nếu 2 request đến trong 3s, coi như 1 lần -> không gửi lại, không ném lỗi
-                if (elapsed >= 0 && elapsed < 3) {
+                long elapsed = Math.max(0, Duration.between(issuedAt, now).getSeconds());
+
+                // Idempotent window 3s: nếu 2 request sát nhau, coi như 1 lần gửi (không ném lỗi, không gửi lại)
+                if (elapsed < 3) {
                     return;
                 }
 
-                // 2) Cooldown: nếu chưa qua thời gian chờ gửi lại -> ném lỗi
                 long remaining = cooldown - elapsed;
                 if (remaining > 0) {
                     throw new IllegalStateException(
@@ -69,19 +72,17 @@ public class OtpService {
                 }
             }
 
-            // Sinh mã & payload
+            // Sinh OTP & payload
             String code = genCode();
-
-            String payloadJson = null;
-            if (payloadOpt.isPresent()) {
+            String payloadJson = payloadOpt.map(p -> {
                 try {
-                    payloadJson = mapper.writeValueAsString(payloadOpt.get());
+                    return mapper.writeValueAsString(p);
                 } catch (Exception e) {
                     throw new RuntimeException("Cannot write payload json", e);
                 }
-            }
+            }).orElse(null);
 
-            // Lưu OTP (chưa dùng) với expiresAt = now + TTL
+            // Lưu OTP mới (expiresAt theo UTC)
             var otp = EmailOtp.builder()
                     .email(email)
                     .type(type)
@@ -93,7 +94,7 @@ public class OtpService {
                     .build();
             repo.save(otp);
 
-            // Gửi email (ở 'pro' sẽ dùng Mailtrap API; ở dev/local dùng SMTP)
+            // Gửi mail qua implementation của EmailService (SMTP ở dev, Mailtrap API ở prod)
             String subject = (type == OtpType.REGISTER) ? "Xác minh đăng ký" : "Mã đặt lại mật khẩu";
             String html = "<p>Xin chào,</p>"
                     + "<p>Mã OTP của bạn là: <b>" + code + "</b></p>"
@@ -109,7 +110,8 @@ public class OtpService {
     }
 
     public EmailOtp verify(String email, OtpType type, String code) {
-        var now = LocalDateTime.now();
+        final LocalDateTime now = nowUtc();
+
         var otp = repo.findFirstByEmailAndTypeAndUsedFalseAndExpiresAtAfterOrderByIdDesc(email, type, now)
                 .orElseThrow(() -> new IllegalStateException("OTP không tồn tại hoặc đã hết hạn."));
 
@@ -117,13 +119,12 @@ public class OtpService {
             otp.setAttempts(otp.getAttempts() + 1);
             repo.save(otp);
             if (otp.getAttempts() >= props.getMaxAttempts()) {
-                otp.setUsed(true); // khoá OTP
+                otp.setUsed(true); // khoá OTP sau quá số lần thử
                 repo.save(otp);
             }
             throw new IllegalArgumentException("OTP không đúng.");
         }
 
-        // OK
         otp.setUsed(true);
         repo.save(otp);
         return otp;

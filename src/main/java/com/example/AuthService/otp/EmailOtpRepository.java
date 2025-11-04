@@ -2,6 +2,7 @@ package com.example.AuthService.otp;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
