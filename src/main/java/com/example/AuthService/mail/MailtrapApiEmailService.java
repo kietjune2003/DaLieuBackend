@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 @Service
-@Profile("pro") // chỉ chạy khi SPRING_PROFILES_ACTIVE=pro
+@Profile("prod") // chỉ chạy khi SPRING_PROFILES_ACTIVE=pro
 public class MailtrapApiEmailService implements EmailService {
 
     private final RestTemplate rest = new RestTemplate();

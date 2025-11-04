@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 import jakarta.mail.internet.MimeMessage;
 
 @Service
-@Profile("!pro")
+@Profile("!prod")
 @RequiredArgsConstructor
 public class SmtpEmailService implements EmailService {
     private final JavaMailSender mailSender;
