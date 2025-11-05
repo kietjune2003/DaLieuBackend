@@ -151,35 +151,6 @@ public class AuthServiceImpl implements AuthService {
         userRepo.save(user);
     }
 
-    // ===== Đăng ký 1 bước (tuỳ chọn giữ lại) =====
-    @Override
-    public TokenResponse register(RegisterRequest req) {
-        String email = normalize(req.getEmail());
-        if (userRepo.existsByEmail(email)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email đã được sử dụng");
-        }
-
-        Role userRole = roleRepo.findByName("USER")
-                .orElseGet(() -> roleRepo.save(Role.builder().name("USER").build()));
-
-        Country country = null;
-        if (req.getCountryId() != null) {
-            country = countryRepo.findById(req.getCountryId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Country không tồn tại"));
-        }
-
-        User user = User.builder()
-                .email(email).name(req.getName())
-                .password(passwordEncoder.encode(req.getPassword()))
-                .gender(req.getGender()).phoneNumber(req.getPhoneNumber())
-                .dateOfBirth(req.getDateOfBirth()).photoUrl(req.getPhotoUrl())
-                .country(country).role(userRole)
-                .enabled(true).accountNonExpired(true).accountNonLocked(true).credentialsNonExpired(true)
-                .build();
-
-        user = userRepo.save(user);
-        return new TokenResponse(jwt.generateAccessToken(user), jwt.generateRefreshToken(user.getUsername()));
-    }
 
     @Override
     public User getByEmailOrThrow(String emailRaw) {

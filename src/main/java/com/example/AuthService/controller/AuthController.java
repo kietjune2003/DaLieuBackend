@@ -60,10 +60,5 @@ public class AuthController {
         return googleAuthService.loginWithGoogle(req);
     }
 
-    // (tuỳ chọn) Đăng ký 1 bước cũ
-    @PostMapping("/register")
-    @ResponseStatus(HttpStatus.CREATED)
-    public TokenResponse register(@Valid @RequestBody RegisterRequest req) {
-        return authService.register(req);
-    }
+
 }

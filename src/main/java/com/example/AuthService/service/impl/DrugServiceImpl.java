@@ -1,10 +1,17 @@
 package com.example.AuthService.service.impl;
 
+import com.example.AuthService.dto.DrugFilter;
 import com.example.AuthService.entity.Drug;
 import com.example.AuthService.repository.DrugRepository;
 import com.example.AuthService.service.DrugService;
+
+
+import com.example.AuthService.spec.DrugSpecifications;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.*;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+
 import java.util.List;
 
 @Service
@@ -46,5 +53,24 @@ public class DrugServiceImpl implements DrugService {
     @Override
     public List<Drug> getAllDrugs() {
         return drugRepository.findAll();
+    }
+
+    // CHÚ Ý chữ ký phải TRÙNG interface
+    @Override
+    public Page<Drug> getDrugs(DrugFilter filter, Pageable pageable) {
+        Pageable effective = (pageable == null || pageable.getSort().isUnsorted())
+                ? PageRequest.of(pageable == null ? 0 : pageable.getPageNumber(),
+                pageable == null ? 20 : pageable.getPageSize(),
+                Sort.by(Sort.Order.desc("id")))
+                : pageable;
+
+        Specification<Drug> spec = DrugSpecifications.withFilter(filter);
+        return drugRepository.findAll(spec, effective);
+    }
+
+    @Override
+    public List<String> suggestNames(String q, int limit) {
+        int size = (limit <= 0 || limit > 20) ? 10 : limit;
+        return drugRepository.suggestNames(q == null ? "" : q.trim(), PageRequest.of(0, size));
     }
 }

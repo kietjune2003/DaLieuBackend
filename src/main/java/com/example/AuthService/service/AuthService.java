@@ -13,7 +13,5 @@ public interface AuthService {
     void forgotPassword(ForgotPasswordRequest req);
     void resetPassword(ResetPasswordRequest req);
 
-    TokenResponse register(RegisterRequest req); // nếu vẫn muốn giữ
-
     User getByEmailOrThrow(String email);
 }
