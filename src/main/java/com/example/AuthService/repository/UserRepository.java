@@ -18,5 +18,5 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     // (tuỳ chọn) dùng cho đăng nhập xã hội
     Optional<User> findByGoogleAccountId(String googleAccountId);
-    Optional<User> findByFacebookAccountId(String facebookAccountId);
+
 }

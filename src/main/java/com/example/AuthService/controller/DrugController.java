@@ -1,6 +1,6 @@
 package com.example.AuthService.controller;
 
-import com.example.AuthService.dto.DrugFilter;
+import com.example.AuthService.dto.DrugFilter; // giữ nguyên import theo file bạn đang dùng
 import com.example.AuthService.entity.Drug;
 import com.example.AuthService.service.DrugService;
 
@@ -24,11 +24,10 @@ public class DrugController {
 
     /**
      * Phân trang + lọc + sắp xếp
-     * Ví dụ:
-     *  GET /api/drugs?page=0&size=20&sort=id,desc&q=para&minPrice=10000&maxPrice=50000&inStock=true&hasImage=true
+     * GET /api/drugs?page=0&size=20&sort=id,desc&q=para&minPrice=10000&maxPrice=50000&inStock=true&hasImage=true
      */
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('USER', 'MODERATOR', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('USER','MODERATOR','ADMIN')")
     public ResponseEntity<Page<Drug>> list(
             @RequestParam(required = false) String q,
             @RequestParam(required = false) BigDecimal minPrice,
@@ -48,50 +47,49 @@ public class DrugController {
 
     /**
      * Gợi ý autocomplete cho ô search
-     * Ví dụ:
-     *  GET /api/drugs/suggest?q=para&limit=10
+     * GET /api/drugs/suggest?q=para&limit=10
      */
     @GetMapping("/suggest")
-    @PreAuthorize("hasAnyAuthority('USER', 'MODERATOR', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('USER','MODERATOR','ADMIN')")
     public ResponseEntity<List<String>> suggest(@RequestParam String q,
                                                 @RequestParam(defaultValue = "10") int limit) {
         return ResponseEntity.ok(drugService.suggestNames(q, limit));
     }
 
     /**
-     * Trả toàn bộ danh sách (không phân trang) — đổi path thành /all để tránh trùng @GetMapping("/")
-     * Chỉ dùng khi thật sự cần (danh sách nhỏ).
+     * Trả toàn bộ danh sách (không phân trang) — chỉ dùng khi thật sự cần (danh sách nhỏ).
+     * GET /api/drugs/all
      */
     @GetMapping("/all")
-    @PreAuthorize("hasAnyAuthority('USER', 'MODERATOR', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('USER','MODERATOR','ADMIN')")
     public ResponseEntity<List<Drug>> getAllDrugs() {
         return ResponseEntity.ok(drugService.getAllDrugs());
     }
 
     // READ by id
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('USER', 'MODERATOR', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('USER','MODERATOR','ADMIN')")
     public ResponseEntity<Drug> getDrug(@PathVariable Long id) {
         return ResponseEntity.ok(drugService.getDrugById(id));
     }
 
-    // CREATE
+    // CREATE — chỉ ADMIN
     @PostMapping
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Drug> createDrug(@RequestBody Drug drug) {
         return ResponseEntity.ok(drugService.createDrug(drug));
     }
 
-    // UPDATE
+    // UPDATE — chỉ ADMIN
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Drug> updateDrug(@PathVariable Long id, @RequestBody Drug drug) {
         return ResponseEntity.ok(drugService.updateDrug(id, drug));
     }
 
-    // DELETE
+    // DELETE — chỉ ADMIN
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> deleteDrug(@PathVariable Long id) {
         drugService.deleteDrug(id);
         return ResponseEntity.noContent().build();

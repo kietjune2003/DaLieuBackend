@@ -1,3 +1,4 @@
+// com.example.AuthService.security.jwt.JwtAuthFilter
 package com.example.AuthService.security.jwt;
 
 import jakarta.servlet.FilterChain;
@@ -25,8 +26,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String uri = request.getRequestURI();
-        System.out.println(uri);
-        return uri.startsWith("/api/**"); // ⬅️ bỏ qua toàn bộ auth endpoints
+        return uri.startsWith("/api/auth/") // <-- mở login/refresh
+                || uri.startsWith("/oauth2/")
+                || uri.startsWith("/login/")
+                || uri.startsWith("/auth/")
+                || uri.startsWith("/error")
+                || uri.equals("/favicon.ico");
     }
 
     @Override
@@ -44,16 +49,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         try {
             username = jwtService.extractUsername(token);
         } catch (Exception e) {
-            chain.doFilter(req, res); // token hỏng → bỏ qua
+            chain.doFilter(req, res); // token hỏng → bỏ qua (sẽ 401 ở entry point)
             return;
         }
 
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             UserDetails user = userDetailsService.loadUserByUsername(username);
-            // dùng isValid(token) (hoặc isTokenValid(token, user) nếu bạn có hàm này)
             if (jwtService.isValid(token)) {
-                UsernamePasswordAuthenticationToken authToken =
-                        new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
+                var authToken = new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
                 authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(req));
                 SecurityContextHolder.getContext().setAuthentication(authToken);
             }

@@ -1,14 +1,17 @@
 package com.example.AuthService.controller;
 
 import com.example.AuthService.dto.*;
+import com.example.AuthService.service.AuthProfileService;
 import com.example.AuthService.service.AuthService;
 
-import com.example.AuthService.service.GoogleAuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.net.URI;
 import java.util.Map;
 
 @RestController
@@ -17,7 +20,8 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
-    private final GoogleAuthService googleAuthService;
+    private final AuthProfileService authProfileService;
+
 
     @PostMapping("/login")
     public TokenResponse login(@RequestBody Map<String, String> body) {
@@ -54,10 +58,18 @@ public class AuthController {
         authService.resetPassword(req);
     }
 
-    // ---- Google Sign-in ----
-    @PostMapping("/google")
-    public TokenResponse loginWithGoogle(@RequestBody GoogleLoginRequest req) {
-        return googleAuthService.loginWithGoogle(req);
+    // GET /auth/login/google -> chuyển sang flow OAuth2
+    @GetMapping("/login/google")
+    public ResponseEntity<Void> loginWithGoogle() {
+        return ResponseEntity.status(302)
+                .location(URI.create("/oauth2/authorization/google"))
+                .build();
+    }
+
+    // Xem trạng thái đăng nhập hiện tại (JWT/OAuth2)
+    @GetMapping("/me")
+    public ResponseEntity<AuthProfileDto> me(@AuthenticationPrincipal Object principal) {
+        return ResponseEntity.ok(authProfileService.buildProfile(principal, true));
     }
 
 

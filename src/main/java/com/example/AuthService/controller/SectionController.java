@@ -21,7 +21,7 @@ public class SectionController {
      * GET /api/drugs/{drugId}/sections
      */
     @GetMapping("/api/drugs/{drugId}/sections")
-    @PreAuthorize("hasAnyAuthority('USER','MODERATOR','ADMIN')")
+    @PreAuthorize("hasAnyRole('USER','MODERATOR','ADMIN')")
     public ResponseEntity<List<Section>> listByDrug(@PathVariable Long drugId) {
         return ResponseEntity.ok(sectionService.listByDrug(drugId));
     }
@@ -32,7 +32,7 @@ public class SectionController {
      * Body: { "title": "...", "content": "..." }
      */
     @PostMapping("/api/drugs/{drugId}/sections")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Section> create(
             @PathVariable Long drugId,
             @RequestBody Section payload
@@ -45,7 +45,7 @@ public class SectionController {
      * GET /api/sections/{id}
      */
     @GetMapping("/api/sections/{id}")
-    @PreAuthorize("hasAnyAuthority('USER','MODERATOR','ADMIN')")
+    @PreAuthorize("hasAnyRole('USER','MODERATOR','ADMIN')")
     public ResponseEntity<Section> getOne(@PathVariable Long id) {
         return ResponseEntity.ok(sectionService.getById(id));
     }
@@ -56,7 +56,7 @@ public class SectionController {
      * Body: { "title": "...", "content": "..." }
      */
     @PutMapping("/api/sections/{id}")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Section> update(
             @PathVariable Long id,
             @RequestBody Section payload
@@ -69,7 +69,7 @@ public class SectionController {
      * DELETE /api/sections/{id}
      */
     @DeleteMapping("/api/sections/{id}")
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         sectionService.delete(id);
         return ResponseEntity.noContent().build();
@@ -80,7 +80,7 @@ public class SectionController {
      * GET /api/sections
      */
     @GetMapping("/api/sections")
-    @PreAuthorize("hasAnyAuthority('USER','MODERATOR','ADMIN')")
+    @PreAuthorize("hasAnyRole('USER','MODERATOR','ADMIN')")
     public ResponseEntity<List<Section>> listAll() {
         return ResponseEntity.ok(sectionService.listAll());
     }
