@@ -1,6 +1,6 @@
 package com.example.AuthService.service;
 
-import com.example.AuthService.dto.AuthTokenResponse;
+import com.example.AuthService.dto.response.AuthTokenResponse;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Map;

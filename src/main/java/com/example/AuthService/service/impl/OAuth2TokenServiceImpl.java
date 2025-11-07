@@ -1,6 +1,6 @@
 package com.example.AuthService.service.impl;
 
-import com.example.AuthService.dto.AuthTokenResponse;
+import com.example.AuthService.dto.response.AuthTokenResponse;
 import com.example.AuthService.security.jwt.JwtProperties;
 import com.example.AuthService.security.jwt.JwtService;
 import com.example.AuthService.service.OAuth2TokenService;

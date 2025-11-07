@@ -1,7 +1,7 @@
 // com.example.AuthService.security.OAuth2LoginSuccessHandler
 package com.example.AuthService.security;
 
-import com.example.AuthService.dto.AuthTokenResponse;
+import com.example.AuthService.dto.response.AuthTokenResponse;
 import com.example.AuthService.entity.User;
 import com.example.AuthService.service.OAuth2TokenService;
 import com.example.AuthService.service.SocialLoginService;

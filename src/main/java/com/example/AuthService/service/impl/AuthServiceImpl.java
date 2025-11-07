@@ -1,6 +1,10 @@
 package com.example.AuthService.service.impl;
 
-import com.example.AuthService.dto.*;
+import com.example.AuthService.dto.request.ForgotPasswordRequest;
+import com.example.AuthService.dto.request.OtpVerifyRequest;
+import com.example.AuthService.dto.request.RegisterStartRequest;
+import com.example.AuthService.dto.request.ResetPasswordRequest;
+import com.example.AuthService.dto.response.TokenResponse;
 import com.example.AuthService.entity.Country;
 import com.example.AuthService.entity.Role;
 import com.example.AuthService.entity.User;
