@@ -96,4 +96,19 @@ public class PrescriptionController {
         PrescriptionRequest prescription = prescriptionService.getPrescriptionAsRequestById(id, user);
         return ResponseEntity.ok(prescription);
     }
+    // 🔄 6. Đổi trạng thái đơn thuốc (1 -> 0 hoặc 0 -> 1)
+    @PutMapping("/{id}/status")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> togglePrescriptionStatus(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        String email = userDetails.getUsername();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng: " + email));
+
+        Prescription updated = prescriptionService.togglePrescriptionStatus(id, user);
+        return ResponseEntity.ok("✅ Đã thay đổi trạng thái đơn thuốc ID " + id + " → status = " + updated.getStatus());
+    }
+
 }

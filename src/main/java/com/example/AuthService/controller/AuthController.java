@@ -5,6 +5,7 @@ import com.example.AuthService.dto.request.ForgotPasswordRequest;
 import com.example.AuthService.dto.request.OtpVerifyRequest;
 import com.example.AuthService.dto.request.RegisterStartRequest;
 import com.example.AuthService.dto.request.ResetPasswordRequest;
+import com.example.AuthService.dto.response.ApiResponse;
 import com.example.AuthService.dto.response.TokenResponse;
 import com.example.AuthService.service.AuthProfileService;
 import com.example.AuthService.service.AuthService;
@@ -40,10 +41,10 @@ public class AuthController {
 
     // ---- Đăng ký OTP 2 bước ----
     @PostMapping("/register/start")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void registerStart(@Valid @RequestBody RegisterStartRequest req) {
-        authService.registerStart(req);
+    public ResponseEntity<ApiResponse> registerStart(@RequestBody RegisterStartRequest req) {
+        return ResponseEntity.ok(authService.registerStart(req));
     }
+
 
     @PostMapping("/register/verify")
     public TokenResponse registerVerify(@Valid @RequestBody OtpVerifyRequest req) {

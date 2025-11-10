@@ -393,5 +393,24 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
 
+    @Override
+    @Transactional
+    public Prescription togglePrescriptionStatus(Long id, User user) {
+        Prescription prescription = prescriptionRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn thuốc với ID: " + id));
+
+        // Kiểm tra quyền sở hữu
+        if (!prescription.getUser().getId().equals(user.getId())) {
+            throw new RuntimeException("Bạn không có quyền thay đổi trạng thái đơn thuốc này");
+        }
+
+        // Đảo trạng thái: nếu 1 -> 0, nếu 0 -> 1
+        Integer newStatus = (prescription.getStatus() != null && prescription.getStatus() == 1) ? 0 : 1;
+        prescription.setStatus(newStatus);
+
+        prescriptionRepository.save(prescription);
+        return prescription;
+    }
+
 
 }

@@ -4,6 +4,7 @@ import com.example.AuthService.dto.request.ForgotPasswordRequest;
 import com.example.AuthService.dto.request.OtpVerifyRequest;
 import com.example.AuthService.dto.request.RegisterStartRequest;
 import com.example.AuthService.dto.request.ResetPasswordRequest;
+import com.example.AuthService.dto.response.ApiResponse;
 import com.example.AuthService.dto.response.TokenResponse;
 import com.example.AuthService.entity.Country;
 import com.example.AuthService.entity.Role;
@@ -74,12 +75,15 @@ public class AuthServiceImpl implements AuthService {
 
     // ===== Register OTP 2 bước =====
     @Override
-    public void registerStart(RegisterStartRequest req) {
+    public ApiResponse registerStart(RegisterStartRequest req) {
         String email = normalize(req.getEmail());
+
+        // Kiểm tra email trùng
         if (userRepo.existsByEmail(email)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email đã được sử dụng");
+            return ApiResponse.error("Email used");
         }
 
+        // Chuẩn bị dữ liệu gửi kèm OTP
         Map<String, Object> payload = new HashMap<>();
         payload.put("passwordHash", passwordEncoder.encode(req.getPassword()));
         payload.put("name",        req.getName());
@@ -89,8 +93,13 @@ public class AuthServiceImpl implements AuthService {
         payload.put("countryId",   req.getCountryId());
         payload.put("photoUrl",    req.getPhotoUrl());
 
+        // Gửi mã OTP
         otpService.sendOtp(email, OtpType.REGISTER, Optional.of(payload));
+
+        // Trả response thành công
+        return ApiResponse.success("OTP is sended");
     }
+
 
     @Override
     public TokenResponse registerVerify(OtpVerifyRequest req) {
@@ -101,9 +110,7 @@ public class AuthServiceImpl implements AuthService {
         try { payload = objectMapper.readValue(otp.getPayloadJson(), Map.class); }
         catch (Exception e) { throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Invalid OTP payload"); }
 
-        if (userRepo.existsByEmail(email)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email đã được sử dụng");
-        }
+
 
         Role userRole = roleRepo.findByName("USER")
                 .orElseGet(() -> roleRepo.save(Role.builder().name("USER").build()));

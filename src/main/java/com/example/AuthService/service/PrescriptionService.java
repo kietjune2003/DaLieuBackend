@@ -4,6 +4,8 @@ import com.example.AuthService.dto.response.PrescriptionSummaryResponse;
 import com.example.AuthService.entity.Prescription;
 import com.example.AuthService.entity.User;
 import com.example.AuthService.dto.request.PrescriptionRequest;
+import org.springframework.transaction.annotation.Transactional;
+
 import java.util.List;
 
 public interface PrescriptionService {
@@ -12,4 +14,7 @@ public interface PrescriptionService {
     List<PrescriptionSummaryResponse> getPrescriptionsByStatus(User user, Integer status);
     PrescriptionRequest updatePrescription(Long id, PrescriptionRequest request, User user);
     PrescriptionRequest getPrescriptionAsRequestById(Long id, User user);
+
+    @Transactional
+    Prescription togglePrescriptionStatus(Long id, User user);
 }
