@@ -12,7 +12,7 @@ public interface AuthService {
     TokenResponse login(String email, String password);
     TokenResponse refresh(String refreshToken);
 
-    ApiResponse registerStart(RegisterStartRequest req);
+    void registerStart(RegisterStartRequest req);
     TokenResponse registerVerify(OtpVerifyRequest req);
 
     void forgotPassword(ForgotPasswordRequest req);

@@ -16,8 +16,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.net.URI;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 @RestController
@@ -41,9 +44,12 @@ public class AuthController {
 
     // ---- Đăng ký OTP 2 bước ----
     @PostMapping("/register/start")
-    public ResponseEntity<ApiResponse> registerStart(@RequestBody RegisterStartRequest req) {
-        return ResponseEntity.ok(authService.registerStart(req));
+    @ResponseStatus(HttpStatus.OK) // trả 200 nếu thành công
+    public void registerStart(@RequestBody RegisterStartRequest req) {
+        authService.registerStart(req);
     }
+
+
 
 
     @PostMapping("/register/verify")
