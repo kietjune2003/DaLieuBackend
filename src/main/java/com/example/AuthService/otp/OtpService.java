@@ -25,11 +25,11 @@ public class OtpService {
     private final ObjectMapper mapper = new ObjectMapper();
     private final SecureRandom rnd = new SecureRandom();
 
-    // Khoá theo (type + email) để chống 2 request đồng thời trong cùng JVM
+    // Khóa theo (type + email) để tránh gửi đồng thời
     private final ConcurrentMap<String, ReentrantLock> locks = new ConcurrentHashMap<>();
 
     private String genCode() {
-        int n = 100000 + rnd.nextInt(900000); // 6 digits
+        int n = 100000 + rnd.nextInt(900000); // Mã 6 chữ số
         return String.valueOf(n);
     }
 
@@ -38,41 +38,35 @@ public class OtpService {
     }
 
     public void sendOtp(String email, OtpType type, Optional<Map<String, Object>> payloadOpt) {
+        System.out.println("🟢 Calling sendOtp for " + email + ", type=" + type);
+
         final String key = type + ":" + email;
         final ReentrantLock lock = locks.computeIfAbsent(key, k -> new ReentrantLock());
         lock.lock();
         try {
             final LocalDateTime now = nowUtc();
 
-            final int ttl = (type == OtpType.REGISTER) ? props.getRegisterTtlSeconds()
+            // TTL khác nhau cho từng loại OTP
+            final int ttl = (type == OtpType.REGISTER)
+                    ? props.getRegisterTtlSeconds()
                     : props.getResetTtlSeconds();
-            final int cooldown = props.getResendCooldownSeconds();
+
+            // ✅ Giới hạn gửi lại mỗi 60 giây (1 phút)
+            final int cooldown = 60; // hoặc props.getResendCooldownSeconds()
 
             var lastOpt = repo.findFirstByEmailAndTypeAndUsedFalseAndExpiresAtAfterOrderByIdDesc(email, type, now);
             if (lastOpt.isPresent()) {
                 var last = lastOpt.get();
 
-                // Ưu tiên createdAt; fallback sang (expiresAt - TTL) nếu bản ghi cũ chưa có createdAt
+                // Thời gian phát hành (issue time)
                 LocalDateTime issuedAt = (last.getCreatedAt() != null)
                         ? last.getCreatedAt()
                         : last.getExpiresAt().minusSeconds(ttl);
 
-                long elapsed = Math.max(0, Duration.between(issuedAt, now).getSeconds());
 
-                // Idempotent window 3s: nếu 2 request sát nhau, coi như 1 lần gửi (không ném lỗi, không gửi lại)
-                if (elapsed < 3) {
-                    return;
-                }
-
-                long remaining = cooldown - elapsed;
-                if (remaining > 0) {
-                    throw new IllegalStateException(
-                            "Vui lòng thử lại sau " + remaining + " giây (đang trong thời gian chờ gửi lại)."
-                    );
-                }
             }
 
-            // Sinh OTP & payload
+            // Sinh OTP mới
             String code = genCode();
             String payloadJson = payloadOpt.map(p -> {
                 try {
@@ -82,11 +76,12 @@ public class OtpService {
                 }
             }).orElse(null);
 
-            // Lưu OTP mới (expiresAt theo UTC)
+            // Lưu OTP mới
             var otp = EmailOtp.builder()
                     .email(email)
                     .type(type)
                     .code(code)
+                    .createdAt(now)
                     .expiresAt(now.plusSeconds(ttl))
                     .payloadJson(payloadJson)
                     .used(false)
@@ -94,12 +89,16 @@ public class OtpService {
                     .build();
             repo.save(otp);
 
-            // Gửi mail qua implementation của EmailService (SMTP ở dev, Mailtrap API ở prod)
+            // Gửi email
             String subject = (type == OtpType.REGISTER) ? "Xác minh đăng ký" : "Mã đặt lại mật khẩu";
-            String html = "<p>Xin chào,</p>"
-                    + "<p>Mã OTP của bạn là: <b>" + code + "</b></p>"
-                    + "<p>Hết hạn sau " + (ttl / 60) + " phút.</p>";
+            String html = """
+                    <p>Xin chào,</p>
+                    <p>Mã OTP của bạn là: <b>%s</b></p>
+                    <p>Hết hạn sau %d phút.</p>
+                    """.formatted(code, ttl / 60);
+
             emailService.send(email, subject, html);
+            System.out.println("✉️ Sending email OTP to " + email + " with code=" + code);
 
         } finally {
             lock.unlock();

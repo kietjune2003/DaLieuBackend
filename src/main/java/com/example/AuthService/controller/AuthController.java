@@ -1,10 +1,7 @@
 package com.example.AuthService.controller;
 
 import com.example.AuthService.dto.*;
-import com.example.AuthService.dto.request.ForgotPasswordRequest;
-import com.example.AuthService.dto.request.OtpVerifyRequest;
-import com.example.AuthService.dto.request.RegisterStartRequest;
-import com.example.AuthService.dto.request.ResetPasswordRequest;
+import com.example.AuthService.dto.request.*;
 import com.example.AuthService.dto.response.ApiResponse;
 import com.example.AuthService.dto.response.TokenResponse;
 import com.example.AuthService.service.AuthProfileService;
@@ -82,6 +79,11 @@ public class AuthController {
     @GetMapping("/me")
     public ResponseEntity<AuthProfileDto> me(@AuthenticationPrincipal Object principal) {
         return ResponseEntity.ok(authProfileService.buildProfile(principal, true));
+    }
+    @PostMapping("/otp/resend")
+    public ResponseEntity<Void> resendOtp(@RequestBody OtpResendRequest req) {
+        authService.resendOtp(req);
+        return ResponseEntity.ok().build();
     }
 
 

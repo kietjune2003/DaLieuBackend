@@ -1,5 +1,6 @@
 package com.example.AuthService.otp;
 
+import com.example.AuthService.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -13,7 +14,7 @@ import java.time.LocalDateTime;
                 @Index(name="idx_email_otps_expires_at", columnList = "expiresAt")
         })
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
-public class EmailOtp {
+public class EmailOtp  {
 
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

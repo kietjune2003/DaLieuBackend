@@ -1,9 +1,6 @@
 package com.example.AuthService.service.impl;
 
-import com.example.AuthService.dto.request.ForgotPasswordRequest;
-import com.example.AuthService.dto.request.OtpVerifyRequest;
-import com.example.AuthService.dto.request.RegisterStartRequest;
-import com.example.AuthService.dto.request.ResetPasswordRequest;
+import com.example.AuthService.dto.request.*;
 import com.example.AuthService.dto.response.ApiResponse;
 import com.example.AuthService.dto.response.TokenResponse;
 import com.example.AuthService.entity.Country;
@@ -181,4 +178,33 @@ public class AuthServiceImpl implements AuthService {
         if (obj instanceof String s && !s.isBlank()) return Long.valueOf(s);
         return null;
     }
+    @Override
+    public void resendOtp(OtpResendRequest req) {
+        String email = normalize(req.getEmail());
+        OtpType type = req.getType();
+
+        if (type == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OtpType không được để trống");
+        }
+
+        switch (type) {
+            case REGISTER -> {
+                if (userRepo.existsByEmail(email)) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Email đã được sử dụng");
+                }
+                // Gửi lại OTP cho đăng ký (payload có thể để trống, vì chỉ cần xác nhận email)
+                otpService.sendOtp(email, OtpType.REGISTER, Optional.empty());
+            }
+
+            case RESET_PASSWORD -> {
+                if (!userRepo.existsByEmail(email)) {
+                    throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Email không tồn tại");
+                }
+                otpService.sendOtp(email, OtpType.RESET_PASSWORD, Optional.empty());
+            }
+
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Loại OTP không hợp lệ");
+        }
+    }
+
 }
