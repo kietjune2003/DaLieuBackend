@@ -1,17 +1,20 @@
 package com.example.AuthService.controller;
 
 import com.example.AuthService.dto.request.PrescriptionRequest;
+import com.example.AuthService.dto.request.UpdateScheduleStatusRequest;
 import com.example.AuthService.entity.Prescription;
 import com.example.AuthService.entity.User;
 import com.example.AuthService.repository.UserRepository;
 import com.example.AuthService.service.PrescriptionService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -110,5 +113,45 @@ public class PrescriptionController {
         Prescription updated = prescriptionService.togglePrescriptionStatus(id, user);
         return ResponseEntity.ok("✅ Đã thay đổi trạng thái đơn thuốc ID " + id + " → status = " + updated.getStatus());
     }
+    // 📆 7. Lấy danh sách liều uống theo ngày
+    @GetMapping("/schedules")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> getSchedulesByDate(
+            @RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        String email = userDetails.getUsername();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng: " + email));
+
+        return ResponseEntity.ok(prescriptionService.getSchedulesByDate(date, user));
+    }
+    @PutMapping("/schedules/status")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> updateScheduleStatus(
+            @RequestBody UpdateScheduleStatusRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        String email = userDetails.getUsername();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng: " + email));
+
+        return ResponseEntity.ok(prescriptionService.updateScheduleStatus(request, user));
+    }
+    @GetMapping("/schedules/history")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> getScheduleHistory(
+            @RequestParam(required = false) String filter,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        String email = userDetails.getUsername();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng: " + email));
+
+        return ResponseEntity.ok(prescriptionService.getHistory(user, filter, year, month));
+    }
+
 
 }

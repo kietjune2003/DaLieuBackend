@@ -1,10 +1,9 @@
 package com.example.AuthService.service.impl;
 
-import com.example.AuthService.dto.request.DrugInPresRequest;
-import com.example.AuthService.dto.request.PrescriptionRequest;
-import com.example.AuthService.dto.request.ScheduleAddRequest;
+import com.example.AuthService.dto.request.*;
 import com.example.AuthService.dto.response.DrugSummaryResponse;
 import com.example.AuthService.dto.response.PrescriptionSummaryResponse;
+import com.example.AuthService.dto.response.ScheduleResponseDTO;
 import com.example.AuthService.entity.*;
 import com.example.AuthService.enums.FrequencyType;
 import com.example.AuthService.repository.*;
@@ -16,6 +15,7 @@ import org.springframework.stereotype.Service;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -410,6 +410,186 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         prescriptionRepository.save(prescription);
         return prescription;
+    }
+    private ScheduleResponseDTO toScheduleDTO(Schedule schedule) {
+        ScheduleResponseDTO dto = new ScheduleResponseDTO();
+
+        dto.setScheduleId(schedule.getId());
+        dto.setDrugName(schedule.getDrugInPrescription().getDrug().getName());
+        dto.setDosage(schedule.getDosage());
+
+        dto.setTime(schedule.getDate().toLocalTime().toString());
+
+        dto.setStatus(schedule.getStatus());
+        dto.setEdited(schedule.isEditted());
+        dto.setPrescriptionName(
+                schedule.getDrugInPrescription().getPrescription().getName()
+        );
+
+        return dto;
+    }
+
+
+    @Override
+    public Object getSchedulesByDate(LocalDate date, User user) {
+
+        if (date.isBefore(LocalDate.now())) {
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "Ngày bạn chọn đã ở trong quá khứ, không có liều uống nào.");
+            return response;
+        }
+
+        LocalDateTime start = date.atStartOfDay();
+        LocalDateTime end = date.atTime(23, 59, 59);
+
+        List<Schedule> schedules = scheduleRepository.findByDateBetween(start, end);
+
+        List<Schedule> filter = schedules.stream()
+                .filter(s -> s.getDrugInPrescription()
+                        .getPrescription()
+                        .getUser()
+                        .getId()
+                        .equals(user.getId()))
+                .sorted(Comparator.comparing(s -> s.getDate().toLocalTime()))
+                .toList();
+
+        List<ScheduleResponseDTO> dtoList = filter.stream()
+                .map(this::toScheduleDTO)
+                .toList();
+
+        return dtoList;
+    }
+    @Override
+    @Transactional
+    public Object updateScheduleStatus(UpdateScheduleStatusRequest request, User user) {
+
+        Schedule schedule = scheduleRepository.findById(request.getScheduleId())
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy schedule"));
+
+        // Kiểm tra schedule có thuộc user không
+        if (!schedule.getDrugInPrescription()
+                .getPrescription()
+                .getUser()
+                .getId()
+                .equals(user.getId())) {
+            return Map.of("message", "Bạn không có quyền cập nhật lịch uống này.");
+        }
+
+        // Luôn set editted = true
+        schedule.setEditted(true);
+
+        // ✔ Trường hợp status = 0
+        if (request.getStatus() == 0) {
+            schedule.setStatus(0);
+            scheduleRepository.save(schedule);
+            return Map.of("message", "Đã cập nhật: Không uống thuốc.");
+        }
+
+        // ✔ Trường hợp status = 1 (muốn xác nhận uống)
+        if (request.getStatus() == 1) {
+
+            LocalDateTime scheduleTime = schedule.getDate();
+            LocalDateTime now = LocalDateTime.now();
+
+            // Nếu uống trễ hơn giờ dự kiến > 10 phút → status = 2
+            if (now.isAfter(scheduleTime.plusMinutes(10))) {
+                schedule.setStatus(2); // uống trễ
+            } else {
+                schedule.setStatus(1); // uống đúng giờ
+            }
+
+            scheduleRepository.save(schedule);
+            return Map.of("message", "Đã xác nhận uống thuốc.");
+        }
+
+        return Map.of("message", "Trạng thái không hợp lệ.");
+    }
+    @Override
+    public Object getHistory(User user, String filter, Integer year, Integer month) {
+
+        LocalDate today = LocalDate.now();
+
+        List<Schedule> schedules;
+
+        // ================================
+        // 🔍 1. Lọc theo 7 ngày gần nhất
+        // ================================
+        if ("7days".equalsIgnoreCase(filter)) {
+            LocalDate start = today.minusDays(7);
+
+            schedules = scheduleRepository
+                    .findByEdittedTrueAndDrugInPrescription_Prescription_User(user)
+                    .stream()
+                    .filter(s -> {
+                        LocalDate d = s.getDate().toLocalDate();
+                        return !d.isBefore(start) && !d.isAfter(today);
+                    })
+                    .toList();
+        }
+
+        // ================================
+        // 🔍 2. Lọc theo tháng
+        // ================================
+        else if ("month".equalsIgnoreCase(filter) && year != null && month != null) {
+
+            schedules = scheduleRepository
+                    .findByEdittedTrueAndDrugInPrescription_Prescription_User(user)
+                    .stream()
+                    .filter(s -> {
+                        LocalDate d = s.getDate().toLocalDate();
+                        return d.getYear() == year && d.getMonthValue() == month;
+                    })
+                    .toList();
+        }
+
+        // ================================
+        // 🔍 3. Mặc định: tất cả lịch đã uống
+        // ================================
+        else {
+            schedules = scheduleRepository
+                    .findByEdittedTrueAndDrugInPrescription_Prescription_User(user);
+        }
+
+        // ================================
+        // 📅 GROUP theo ngày
+        // ================================
+        Map<LocalDate, List<Schedule>> grouped =
+                schedules.stream()
+                        .collect(Collectors.groupingBy(s -> s.getDate().toLocalDate()));
+
+        List<ScheduleHistoryDTO> result = grouped.entrySet().stream()
+                .sorted(Comparator.comparing(
+                        (Map.Entry<LocalDate, List<Schedule>> e) -> e.getKey()
+                ).reversed())
+                .map(entry -> {
+
+                    List<ScheduleResponseDTO> list = entry.getValue().stream()
+                            .sorted(Comparator.comparing(s -> s.getDate().toLocalTime()))
+                            .map(this::toScheduleDTO)
+                            .toList();
+
+                    return new ScheduleHistoryDTO(entry.getKey(), list);
+                })
+                .toList();
+
+        // ================================
+        // 📊 4. THỐNG KÊ
+        // ================================
+        long total = schedules.size();
+        long onTime = schedules.stream().filter(s -> s.getStatus() == 1).count();
+        long late = schedules.stream().filter(s -> s.getStatus() == 2).count();
+        long skipped = schedules.stream().filter(s -> s.getStatus() == 0).count();
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("history", result);
+        response.put("statistics", Map.of(
+                "totalTaken", total,
+                "onTime", onTime,
+                "late", late,
+                "skipped", skipped
+        ));
+
+        return response;
     }
 
 
