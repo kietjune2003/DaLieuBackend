@@ -110,4 +110,83 @@
   - `id`: number (bắt buộc)
 - 200 OK: Trả về `Section`.
 
+### Prescriptions
+
+#### POST `/api/prescriptions`
+- Mô tả: Tạo đơn thuốc mới kèm lịch uống tự động sinh.
+- Quyền: Người dùng đã đăng nhập.
+- Body (JSON `PrescriptionRequest`):
+  - `name`: string (bắt buộc) – tên đơn thuốc.
+  - `hospital`, `doctorName`: string (tuỳ chọn).
+  - `consultationDate`, `followUpDate`: string, `yyyy-MM-dd`.
+  - `drugs`: array (ít nhất 1 phần tử), mỗi phần tử gồm:
+    - `drug_id`, `unit_id`: number (bắt buộc).
+    - `start_date`, `end_date`: string (`yyyy-MM-dd`, có thể bỏ `end_date` → mặc định +7 ngày).
+    - `note`: string.
+    - `frequency_type`: `DAILY` | `INTERVAL` | `WEEKLY`.
+    - `interval_days`: number (khi `frequency_type=INTERVAL`).
+    - `days_of_week`: string[] (ví dụ: `["MONDAY","FRIDAY"]` cho `WEEKLY`).
+    - `schedules`: array (tuỳ chọn) các khung giờ:
+      - `time`: string `HH:mm`.
+      - `dosage`: number (mặc định 1.0 nếu bỏ trống).
+- 200 OK: chuỗi thông báo chứa `ID` đơn thuốc.
+- 400: Thiếu thuốc, thiếu thông tin thuốc hoặc người dùng không hợp lệ.
+
+#### DELETE `/api/prescriptions/{id}`
+- Mô tả: Xoá đơn thuốc và toàn bộ thuốc/lịch con.
+- Quyền: Người dùng sở hữu đơn.
+- Path params: `id` (number, bắt buộc).
+- 200 OK: Thông báo xoá thành công.
+- 404/403: Không tìm thấy hoặc không có quyền.
+
+#### GET `/api/prescriptions/status/{status}`
+- Mô tả: Danh sách đơn theo trạng thái (0 = ẩn, 1 = hiển thị).
+- Quyền: Người dùng sở hữu.
+- Path params: `status`: number.
+- 200 OK: `PrescriptionSummaryResponse[]` gồm:
+  - `id`, `prescriptionName`, `totalDrugs`,
+  - `drugs`: `[{ "drugName": string, "nearestTime": ISO datetime|null }]`.
+
+#### PUT `/api/prescriptions/{id}`
+- Mô tả: Cập nhật thông tin, danh sách thuốc và lịch (xoá toàn bộ cũ rồi tạo lại).
+- Quyền: Người dùng sở hữu.
+- Body: Giống `PrescriptionRequest`.
+- 200 OK: Trả về nội dung đơn thuốc mới (`PrescriptionRequest`).
+
+#### GET `/api/prescriptions/{id}`
+- Mô tả: Lấy chi tiết đơn thuốc để hiển thị lại form chỉnh sửa.
+- Quyền: Người dùng sở hữu.
+- 200 OK: `PrescriptionRequest` (bao gồm `drugs[].schedules[]` theo giờ).
+
+#### PUT `/api/prescriptions/{id}/status`
+- Mô tả: Chuyển trạng thái đơn (1↔0).
+- Quyền: Người dùng sở hữu.
+- 200 OK: Chuỗi thông báo kèm trạng thái mới.
+
+#### GET `/api/prescriptions/schedules`
+- Mô tả: Lấy tất cả liều uống trong ngày.
+- Quyền: Người dùng sở hữu.
+- Query params: `date` (string `yyyy-MM-dd`, bắt buộc).
+- 200 OK:
+  - Nếu ngày quá khứ: `{ "message": "..." }`.
+  - Nếu hợp lệ: `ScheduleResponseDTO[]` gồm `scheduleId`, `drugName`, `dosage`, `time`, `status` (0=chưa uống, 1=đúng giờ, 2=uống trễ), `edited`, `prescriptionName`.
+
+#### PUT `/api/prescriptions/schedules/status`
+- Mô tả: Ghi nhận đã uống/chưa uống 1 lịch.
+- Quyền: Người dùng sở hữu.
+- Body (`UpdateScheduleStatusRequest`):
+  - `scheduleId`: number (bắt buộc).
+  - `status`: number (`0` = bỏ qua, `1` = xác nhận uống; hệ thống tự đổi 1→2 nếu trễ >10 phút).
+- 200 OK: `{ "message": string }`.
+
+#### GET `/api/prescriptions/schedules/history`
+- Mô tả: Lịch sử uống thuốc đã xác nhận (`edited = true`) kèm thống kê.
+- Quyền: Người dùng sở hữu.
+- Query params (tuỳ chọn):
+  - `filter`: `7days` | `month` (bắt buộc kèm `year`, `month`) | bỏ trống = toàn bộ.
+  - `year`, `month`: number (khi `filter=month`).
+- 200 OK: Object:
+  - `history`: `ScheduleHistoryDTO[]` (`date`, `schedules[]` theo cấu trúc `ScheduleResponseDTO`).
+  - `statistics`: `{ "totalTaken", "onTime", "late", "skipped" }`.
+
 
