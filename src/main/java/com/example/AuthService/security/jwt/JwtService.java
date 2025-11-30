@@ -6,6 +6,8 @@ import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
+import com.example.AuthService.entity.User;
+
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
@@ -28,20 +30,25 @@ public class JwtService {
         this.key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(props.getSecret()));
     }
 
-    public String generateAccessToken(UserDetails user) {
+    public String generateAccessToken(UserDetails userDetails) {
+
+        User user = (User) userDetails; // ⭐ Lấy đúng User của bạn
+
         var now = Instant.now();
         var roles = user.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .toList();
 
         return Jwts.builder()
-                .claims(Map.of("roles", roles))
+                .claim("roles", roles)
+                .claim("userId", user.getId())  // ⭐ THÊM USER ID Ở ĐÂY
                 .subject(user.getUsername().toLowerCase(Locale.ROOT))
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusMillis(props.getAccessExpirationMs())))
                 .signWith(key, Jwts.SIG.HS256)
                 .compact();
     }
+
 
     public String generateRefreshToken(String username) {
         var now = Instant.now();
