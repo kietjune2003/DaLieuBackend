@@ -51,38 +51,55 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // 🔹 Duyệt qua danh sách thuốc
         for (DrugInPresRequest drugReq : request.getDrugs()) {
 
-            if (drugReq.getDrugId() == null) {
-                throw new IllegalArgumentException(" Drug ID must not be null");
-            }
+            // drugName giờ là optional → KHÔNG ép buộc
+            // nhưng unitId vẫn nên bắt buộc
             if (drugReq.getUnitId() == null) {
-                throw new IllegalArgumentException(" Unit ID must not be null");
+                throw new IllegalArgumentException("Unit ID must not be null");
             }
-
-            Drug drug = drugRepository.findById(drugReq.getDrugId())
-                    .orElseThrow(() -> new IllegalArgumentException(" Drug not found with ID: " + drugReq.getDrugId()));
 
             Unit unit = unitRepository.findById(drugReq.getUnitId())
-                    .orElseThrow(() -> new IllegalArgumentException(" Unit not found with ID: " + drugReq.getUnitId()));
+                    .orElseThrow(() ->
+                            new IllegalArgumentException("Unit not found with ID: " + drugReq.getUnitId())
+                    );
+
+            if (drugReq.getStartDate() == null || drugReq.getStartDate().isBlank()) {
+                throw new IllegalArgumentException("Start date must not be null");
+            }
 
             LocalDate startDate = parseLocalDate(drugReq.getStartDate());
-            LocalDate endDate = (drugReq.getEndDate() != null && !drugReq.getEndDate().isEmpty())
+            LocalDate endDate = (drugReq.getEndDate() != null && !drugReq.getEndDate().isBlank())
                     ? parseLocalDate(drugReq.getEndDate())
-                    : startDate.plusDays(7);
+                    : startDate.plusDays(7);   // default 7 ngày nếu không truyền
 
+            // 🔹 Map DTO → Entity DrugInPrescription
             DrugInPrescription drugInPrescription = new DrugInPrescription();
             drugInPrescription.setPrescription(savedPrescription);
-            drugInPrescription.setDrug(drug);
+            drugInPrescription.setDrugName(drugReq.getDrugName());   // <-- dùng String thay vì entity Drug
             drugInPrescription.setUnit(unit);
             drugInPrescription.setStartDate(startDate);
             drugInPrescription.setEndDate(endDate);
             drugInPrescription.setNote(drugReq.getNote());
-            drugInPrescription.setFrequencyType(
-                    drugReq.getFrequencyType() != null ? drugReq.getFrequencyType() : FrequencyType.DAILY
-            );
-            drugInPrescription.setIntervalDays(drugReq.getIntervalDays());
-            drugInPrescription.setDaysOfWeek(
-                    drugReq.getDaysOfWeek() != null ? drugReq.getDaysOfWeek() : new ArrayList<>()
-            );
+
+            // 🔹 Tần suất (mặc định DAILY nếu không truyền)
+            FrequencyType frequencyType =
+                    (drugReq.getFrequencyType() != null) ? drugReq.getFrequencyType() : FrequencyType.DAILY;
+            drugInPrescription.setFrequencyType(frequencyType);
+
+            // Nếu là INTERVAL thì set intervalDays, còn lại có thể để null cho sạch dữ liệu
+            if (frequencyType == FrequencyType.INTERVAL) {
+                drugInPrescription.setIntervalDays(drugReq.getIntervalDays());
+            } else {
+                drugInPrescription.setIntervalDays(null);
+            }
+
+            // Nếu là WEEKLY thì lưu daysOfWeek, ngược lại thì để list rỗng
+            if (frequencyType == FrequencyType.WEEKLY &&
+                    drugReq.getDaysOfWeek() != null &&
+                    !drugReq.getDaysOfWeek().isEmpty()) {
+                drugInPrescription.setDaysOfWeek(new ArrayList<>(drugReq.getDaysOfWeek()));
+            } else {
+                drugInPrescription.setDaysOfWeek(new ArrayList<>());
+            }
 
             DrugInPrescription savedDrugInPres = drugInPrescriptionRepository.save(drugInPrescription);
 
@@ -93,6 +110,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         return savedPrescription;
     }
+
 
 
     /**
@@ -215,32 +233,54 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     public List<PrescriptionSummaryResponse> getPrescriptionsByStatus(User user, Integer status) {
         List<Prescription> prescriptions = prescriptionRepository.findByUserAndStatus(user, status);
         List<PrescriptionSummaryResponse> result = new ArrayList<>();
+
         // 🔹 Sắp xếp theo ngày tạo giảm dần (mới nhất trước)
-        prescriptions.sort(Comparator.comparing(Prescription::getCreatedAt).reversed());
+        prescriptions.sort(
+                Comparator.comparing(Prescription::getCreatedAt)
+                        .reversed()
+        );
+
+        // 🔹 Thời điểm hiện tại dùng chung
+        LocalDateTime now = LocalDateTime.now();
+
         for (Prescription prescription : prescriptions) {
             List<DrugSummaryResponse> drugSummaries = new ArrayList<>();
 
-            for (DrugInPrescription dip : prescription.getDrugInPrescriptions()) {
-                if (dip.getDrug() == null) continue;
+            if (prescription.getDrugInPrescriptions() != null) {
+                for (DrugInPrescription dip : prescription.getDrugInPrescriptions()) {
 
-                String drugName = dip.getDrug().getName();
+                    // 🔹 Lấy tên thuốc từ String drugName (có thể null)
+                    String drugName = dip.getDrugName();
 
-                // Tìm giờ uống gần nhất (sắp tới so với hiện tại)
-                LocalDateTime now = LocalDateTime.now();
-                LocalDateTime nearest = dip.getSchedules().stream()
-                        .map(Schedule::getDate)
-                        .filter(date -> date.isAfter(now))
-                        .sorted()
-                        .findFirst()
-                        .orElse(null);
+                    // Nếu bạn muốn bỏ qua thuốc không có tên:
+                    // if (drugName == null || drugName.isBlank()) continue;
 
-                drugSummaries.add(new DrugSummaryResponse(drugName, nearest));
+                    // Hoặc set tên mặc định nếu null/rỗng:
+                    if (drugName == null || drugName.isBlank()) {
+                        drugName = "Thuốc không tên";
+                    }
+
+                    // 🔹 Tìm giờ uống gần nhất (sắp tới so với hiện tại)
+                    LocalDateTime nearest = null;
+                    if (dip.getSchedules() != null && !dip.getSchedules().isEmpty()) {
+                        nearest = dip.getSchedules().stream()
+                                .map(Schedule::getDate)
+                                .filter(date -> date.isAfter(now))
+                                .sorted()
+                                .findFirst()
+                                .orElse(null);
+                    }
+
+                    drugSummaries.add(new DrugSummaryResponse(drugName, nearest));
+                }
             }
 
             PrescriptionSummaryResponse summary = new PrescriptionSummaryResponse(
                     prescription.getId(),
                     prescription.getName(),
-                    prescription.getDrugInPrescriptions().size(),
+                    prescription.getDrugInPrescriptions() != null
+                            ? prescription.getDrugInPrescriptions().size()
+                            : 0,
                     drugSummaries
             );
 
@@ -252,18 +292,25 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
 
 
+
     @Override
     @Transactional
     public PrescriptionRequest updatePrescription(Long id, PrescriptionRequest request, User user) {
-        // 🔹 1. Tìm đơn thuốc theo ID và kiểm tra quyền
+        // 🔹 1. Tìm đơn thuốc theo ID
         Prescription prescription = prescriptionRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn thuốc với ID: " + id));
 
-        if (!prescription.getUser().getId().equals(user.getId())) {
+        // 🔹 2. Kiểm tra quyền sở hữu
+        if (user == null || !prescription.getUser().getId().equals(user.getId())) {
             throw new RuntimeException("Bạn không có quyền cập nhật đơn thuốc này");
         }
 
-        // 🔹 2. Cập nhật thông tin cơ bản của đơn thuốc
+        // 🔹 3. Validate danh sách thuốc (tùy bạn có muốn cho phép đơn rỗng hay không)
+        if (request.getDrugs() == null || request.getDrugs().isEmpty()) {
+            throw new IllegalArgumentException("Đơn thuốc phải chứa ít nhất một thuốc");
+        }
+
+        // 🔹 4. Cập nhật thông tin cơ bản của đơn thuốc
         prescription.setName(request.getName());
         prescription.setHospital(request.getHospital());
         prescription.setDoctorName(request.getDoctorName());
@@ -271,55 +318,89 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         prescription.setFollowUpDate(parseLocalDate(request.getFollowUpDate()));
         prescription.setUpdatedAt(LocalDateTime.now());
 
-        // 🔹 3. Xóa dữ liệu cũ (bao gồm cả schedules)
-        for (DrugInPrescription oldDrug : prescription.getDrugInPrescriptions()) {
-            scheduleRepository.deleteAll(oldDrug.getSchedules());
+        // 🔹 5. Xóa dữ liệu thuốc + schedule cũ
+        if (prescription.getDrugInPrescriptions() != null) {
+            for (DrugInPrescription oldDrug : prescription.getDrugInPrescriptions()) {
+                // nếu Schedule có cascade orphanRemoval thì phần này có thể bỏ,
+                // nhưng giữ lại cho chắc chắn:
+                scheduleRepository.deleteAll(oldDrug.getSchedules());
+            }
+            drugInPrescriptionRepository.deleteAll(prescription.getDrugInPrescriptions());
+            prescription.getDrugInPrescriptions().clear();
         }
-        drugInPrescriptionRepository.deleteAll(prescription.getDrugInPrescriptions());
-        prescription.getDrugInPrescriptions().clear();
 
-        // 🔹 4. Thêm lại danh sách thuốc mới
+        // 🔹 6. Thêm lại danh sách thuốc mới
         for (DrugInPresRequest drugReq : request.getDrugs()) {
 
-            Drug drug = drugRepository.findById(drugReq.getDrugId())
-                    .orElseThrow(() -> new RuntimeException("Không tìm thấy thuốc với ID: " + drugReq.getDrugId()));
+            // unitId vẫn bắt buộc
+            if (drugReq.getUnitId() == null) {
+                throw new IllegalArgumentException("Unit ID must not be null");
+            }
+
             Unit unit = unitRepository.findById(drugReq.getUnitId())
-                    .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn vị với ID: " + drugReq.getUnitId()));
+                    .orElseThrow(() -> new RuntimeException(
+                            "Không tìm thấy đơn vị với ID: " + drugReq.getUnitId()
+                    ));
+
+            if (drugReq.getStartDate() == null || drugReq.getStartDate().isBlank()) {
+                throw new IllegalArgumentException("Start date must not be null");
+            }
 
             LocalDate startDate = parseLocalDate(drugReq.getStartDate());
-            LocalDate endDate = (drugReq.getEndDate() != null && !drugReq.getEndDate().isEmpty())
+            LocalDate endDate = (drugReq.getEndDate() != null && !drugReq.getEndDate().isBlank())
                     ? parseLocalDate(drugReq.getEndDate())
-                    : startDate.plusDays(7);
+                    : startDate.plusDays(7);    // default 7 ngày nếu không truyền
 
             DrugInPrescription newDrug = new DrugInPrescription();
             newDrug.setPrescription(prescription);
-            newDrug.setDrug(drug);
+
+            // 🔹 Dùng String drugName (có thể null nếu bạn cho phép)
+            newDrug.setDrugName(drugReq.getDrugName());
+
             newDrug.setUnit(unit);
             newDrug.setStartDate(startDate);
             newDrug.setEndDate(endDate);
             newDrug.setNote(drugReq.getNote());
-            newDrug.setFrequencyType(
-                    drugReq.getFrequencyType() != null ? drugReq.getFrequencyType() : FrequencyType.DAILY
-            );
-            newDrug.setIntervalDays(drugReq.getIntervalDays());
-            newDrug.setDaysOfWeek(
-                    drugReq.getDaysOfWeek() != null ? drugReq.getDaysOfWeek() : new ArrayList<>()
-            );
 
+            // 🔹 Tần suất (mặc định DAILY nếu null)
+            FrequencyType frequencyType =
+                    (drugReq.getFrequencyType() != null) ? drugReq.getFrequencyType() : FrequencyType.DAILY;
+            newDrug.setFrequencyType(frequencyType);
+
+            // INTERVAL → lưu intervalDays, còn lại cho null cho sạch
+            if (frequencyType == FrequencyType.INTERVAL) {
+                newDrug.setIntervalDays(drugReq.getIntervalDays());
+            } else {
+                newDrug.setIntervalDays(null);
+            }
+
+            // WEEKLY → lưu daysOfWeek, ngoài ra để list rỗng
+            if (frequencyType == FrequencyType.WEEKLY &&
+                    drugReq.getDaysOfWeek() != null &&
+                    !drugReq.getDaysOfWeek().isEmpty()) {
+                newDrug.setDaysOfWeek(new ArrayList<>(drugReq.getDaysOfWeek()));
+            } else {
+                newDrug.setDaysOfWeek(new ArrayList<>());
+            }
+
+            // Lưu thuốc mới
             DrugInPrescription savedDrug = drugInPrescriptionRepository.save(newDrug);
 
             // 🔹 Sinh lại lịch uống dựa theo logic giống createPrescription()
             List<Schedule> newSchedules = generateSchedules(drugReq, savedDrug);
             scheduleRepository.saveAll(newSchedules);
 
+            // Gắn lại vào prescription
             prescription.getDrugInPrescriptions().add(savedDrug);
         }
 
-        // 🔹 5. Lưu lại đơn thuốc
+        // 🔹 7. Lưu lại đơn thuốc
         prescriptionRepository.save(prescription);
 
-        return request; // Hoặc map sang DTO trả về nếu cần
+        // Ở đây bạn có thể map Prescription → PrescriptionRequest/Response nếu muốn
+        return request;
     }
+
 
 
 
@@ -350,7 +431,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // Với mỗi DrugInPrescription -> tạo DrugInPresRequest
         for (DrugInPrescription dip : prescription.getDrugInPrescriptions()) {
             DrugInPresRequest dReq = DrugInPresRequest.builder()
-                    .drugId(dip.getDrug() != null ? dip.getDrug().getId() : null)
+                    .drugName(dip.getDrugName() != null ? dip.getDrugName() : null)
                     .unitId(dip.getUnit() != null ? dip.getUnit().getId() : null)
                     .startDate(dip.getStartDate() != null ? dip.getStartDate().format(dateFormatter) : null)
                     .endDate(dip.getEndDate() != null ? dip.getEndDate().format(dateFormatter) : null)
@@ -415,7 +496,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         ScheduleResponseDTO dto = new ScheduleResponseDTO();
 
         dto.setScheduleId(schedule.getId());
-        dto.setDrugName(schedule.getDrugInPrescription().getDrug().getName());
+        dto.setDrugName(schedule.getDrugInPrescription().getDrugName());
         dto.setDosage(schedule.getDosage());
 
         dto.setTime(schedule.getDate().toLocalTime().toString());
@@ -591,6 +672,21 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         return response;
     }
+    @Transactional
+    public void deleteAllPrescriptionsForTesting() {
+
+        // ⚠️ Cẩn thận: XÓA TOÀN BỘ dữ liệu liên quan đến đơn thuốc trong DB
+
+        // 1) Xoá hết Schedule
+        scheduleRepository.deleteAll();
+
+        // 2) Xoá hết DrugInPrescription
+        drugInPrescriptionRepository.deleteAll();
+
+        // 3) Xoá hết Prescription
+        prescriptionRepository.deleteAll();
+    }
+
 
 
 }

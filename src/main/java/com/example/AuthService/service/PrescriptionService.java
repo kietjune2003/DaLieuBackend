@@ -25,4 +25,5 @@ public interface PrescriptionService {
     Object updateScheduleStatus(UpdateScheduleStatusRequest request, User user);
     Object getHistory(User user, String filter, Integer year, Integer month);
 
+    void deleteAllPrescriptionsForTesting();
 }

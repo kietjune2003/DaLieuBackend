@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/prescriptions")
@@ -152,6 +153,10 @@ public class PrescriptionController {
 
         return ResponseEntity.ok(prescriptionService.getHistory(user, filter, year, month));
     }
-
+    @DeleteMapping("/clear-all")
+    public Map<String, String> clearAll() {
+        prescriptionService.deleteAllPrescriptionsForTesting();
+        return Map.of("message", "Đã xoá toàn bộ dữ liệu đơn thuốc (prescription, drug_in_prescriptions, schedules).");
+    }
 
 }

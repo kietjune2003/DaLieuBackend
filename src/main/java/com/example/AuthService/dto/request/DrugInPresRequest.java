@@ -14,8 +14,8 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class DrugInPresRequest {
-    @JsonProperty("drug_id")
-    private Long drugId;
+    @JsonProperty("drug_name")
+    private String drugName;
 
     @JsonProperty("unit_id")
     private Long unitId;

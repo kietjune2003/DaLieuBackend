@@ -27,9 +27,7 @@ public class DrugInPrescription extends BaseEntity {
     @JoinColumn(name = "prescription_id")
     private Prescription prescription;
 
-    @ManyToOne
-    @JoinColumn(name = "drug_id")
-    private Drug drug;
+    private String drugName;
 
     @ManyToOne
     @JoinColumn(name = "unit_id")
