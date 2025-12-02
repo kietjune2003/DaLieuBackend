@@ -1,9 +1,11 @@
 package com.example.AuthService.service;
 
+import com.example.AuthService.dto.request.DrugInPresRequest;
 import com.example.AuthService.dto.request.ScheduleHistoryDTO;
 import com.example.AuthService.dto.request.UpdateScheduleStatusRequest;
 import com.example.AuthService.dto.response.PrescriptionSummaryResponse;
 import com.example.AuthService.dto.response.ScheduleResponseDTO;
+import com.example.AuthService.entity.DrugInPrescription;
 import com.example.AuthService.entity.Prescription;
 import com.example.AuthService.entity.User;
 import com.example.AuthService.dto.request.PrescriptionRequest;
@@ -24,6 +26,11 @@ public interface PrescriptionService {
     Object getSchedulesByDate(LocalDate date, User user);
     Object updateScheduleStatus(UpdateScheduleStatusRequest request, User user);
     Object getHistory(User user, String filter, Integer year, Integer month);
-
+    DrugInPrescription createSingleDrug(DrugInPresRequest request, User user);
     void deleteAllPrescriptionsForTesting();
+    // 🔹 Cập nhật thuốc (đơn hoặc trong đơn)
+    DrugInPrescription updateDrug(Long drugInPresId, DrugInPresRequest request, User user);
+
+    // 🔹 Xoá thuốc (đơn hoặc trong đơn)
+    void deleteDrug(Long drugInPresId, User user);
 }

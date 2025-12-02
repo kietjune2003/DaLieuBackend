@@ -23,9 +23,13 @@ public class DrugInPrescription extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
-    @JoinColumn(name = "prescription_id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "prescription_id", nullable = true)
     private Prescription prescription;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    private User user;
 
     private String drugName;
 

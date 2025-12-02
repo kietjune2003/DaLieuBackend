@@ -74,6 +74,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             // 🔹 Map DTO → Entity DrugInPrescription
             DrugInPrescription drugInPrescription = new DrugInPrescription();
             drugInPrescription.setPrescription(savedPrescription);
+            drugInPrescription.setUser(user);
             drugInPrescription.setDrugName(drugReq.getDrugName());   // <-- dùng String thay vì entity Drug
             drugInPrescription.setUnit(unit);
             drugInPrescription.setStartDate(startDate);
@@ -686,6 +687,180 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // 3) Xoá hết Prescription
         prescriptionRepository.deleteAll();
     }
+    @Override
+    @Transactional
+    public DrugInPrescription createSingleDrug(DrugInPresRequest drugReq, User user) {
+
+        if (user == null) {
+            throw new IllegalArgumentException("User must not be null when creating single drug");
+        }
+
+        if (drugReq.getUnitId() == null) {
+            throw new IllegalArgumentException("Unit ID must not be null");
+        }
+
+        Unit unit = unitRepository.findById(drugReq.getUnitId())
+                .orElseThrow(() ->
+                        new IllegalArgumentException("Unit not found with ID: " + drugReq.getUnitId())
+                );
+
+        if (drugReq.getStartDate() == null || drugReq.getStartDate().isBlank()) {
+            throw new IllegalArgumentException("Start date must not be null");
+        }
+
+        LocalDate startDate = parseLocalDate(drugReq.getStartDate());
+        LocalDate endDate = (drugReq.getEndDate() != null && !drugReq.getEndDate().isBlank())
+                ? parseLocalDate(drugReq.getEndDate())
+                : startDate.plusDays(7);
+
+        DrugInPrescription drugInPrescription = new DrugInPrescription();
+
+        // ❌ KHÔNG gắn prescription
+        drugInPrescription.setPrescription(null);
+
+        // ✅ GẮN user – rất quan trọng
+        drugInPrescription.setUser(user);
+
+        drugInPrescription.setDrugName(drugReq.getDrugName());
+        drugInPrescription.setUnit(unit);
+        drugInPrescription.setStartDate(startDate);
+        drugInPrescription.setEndDate(endDate);
+        drugInPrescription.setNote(drugReq.getNote());
+
+        FrequencyType frequencyType =
+                (drugReq.getFrequencyType() != null) ? drugReq.getFrequencyType() : FrequencyType.DAILY;
+        drugInPrescription.setFrequencyType(frequencyType);
+
+        if (frequencyType == FrequencyType.INTERVAL) {
+            drugInPrescription.setIntervalDays(drugReq.getIntervalDays());
+        } else {
+            drugInPrescription.setIntervalDays(null);
+        }
+
+        if (frequencyType == FrequencyType.WEEKLY &&
+                drugReq.getDaysOfWeek() != null &&
+                !drugReq.getDaysOfWeek().isEmpty()) {
+            drugInPrescription.setDaysOfWeek(new ArrayList<>(drugReq.getDaysOfWeek()));
+        } else {
+            drugInPrescription.setDaysOfWeek(new ArrayList<>());
+        }
+
+        DrugInPrescription savedDrugInPres = drugInPrescriptionRepository.save(drugInPrescription);
+
+        List<Schedule> generatedSchedules = generateSchedules(drugReq, savedDrugInPres);
+        scheduleRepository.saveAll(generatedSchedules);
+
+        return savedDrugInPres;
+    }
+    @Override
+    @Transactional
+    public DrugInPrescription updateDrug(Long drugInPresId,
+                                         DrugInPresRequest drugReq,
+                                         User user) {
+
+        if (user == null) {
+            throw new IllegalArgumentException("User must not be null when updating drug");
+        }
+
+        // 1. Lấy thuốc
+        DrugInPrescription drug = drugInPrescriptionRepository.findById(drugInPresId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "DrugInPrescription not found with ID: " + drugInPresId
+                ));
+
+        // 2. Check quyền (dựa vào drug.user)
+        if (drug.getUser() == null || !drug.getUser().getId().equals(user.getId())) {
+            throw new RuntimeException("Access denied for this drug");
+        }
+
+        // 3. Validate & load Unit
+        if (drugReq.getUnitId() == null) {
+            throw new IllegalArgumentException("Unit ID must not be null");
+        }
+
+        Unit unit = unitRepository.findById(drugReq.getUnitId())
+                .orElseThrow(() ->
+                        new IllegalArgumentException("Unit not found with ID: " + drugReq.getUnitId())
+                );
+
+        // 4. Validate ngày
+        if (drugReq.getStartDate() == null || drugReq.getStartDate().isBlank()) {
+            throw new IllegalArgumentException("Start date must not be null");
+        }
+
+        LocalDate startDate = parseLocalDate(drugReq.getStartDate());
+        LocalDate endDate = (drugReq.getEndDate() != null && !drugReq.getEndDate().isBlank())
+                ? parseLocalDate(drugReq.getEndDate())
+                : startDate.plusDays(7);
+
+        // 5. Cập nhật field của DrugInPrescription
+        drug.setDrugName(drugReq.getDrugName());
+        drug.setUnit(unit);
+        drug.setStartDate(startDate);
+        drug.setEndDate(endDate);
+        drug.setNote(drugReq.getNote());
+
+        FrequencyType frequencyType =
+                (drugReq.getFrequencyType() != null) ? drugReq.getFrequencyType() : FrequencyType.DAILY;
+        drug.setFrequencyType(frequencyType);
+
+        if (frequencyType == FrequencyType.INTERVAL) {
+            drug.setIntervalDays(drugReq.getIntervalDays());
+        } else {
+            drug.setIntervalDays(null);
+        }
+
+        if (frequencyType == FrequencyType.WEEKLY &&
+                drugReq.getDaysOfWeek() != null &&
+                !drugReq.getDaysOfWeek().isEmpty()) {
+            drug.setDaysOfWeek(new ArrayList<>(drugReq.getDaysOfWeek()));
+        } else {
+            drug.setDaysOfWeek(new ArrayList<>());
+        }
+
+        // 6. XÓA LỊCH CŨ
+        // do bạn đã set orphanRemoval = true, chỉ cần clear list là DB cũng xoá
+        drug.getSchedules().clear();
+
+        // 7. Generate lịch mới dùng lại hàm generateSchedules cũ
+        List<Schedule> newSchedules = generateSchedules(drugReq, drug);
+
+        // 8. Gắn vào entity (giữ state trong bộ nhớ cho đúng)
+        drug.getSchedules().addAll(newSchedules);
+
+        // 9. Lưu schedule (có 2 cách, chọn 1):
+        // Cách 1: rely vào cascade, không cần saveAll, chỉ cần drug đang managed:
+        // -> JPA sẽ tự persist newSchedules khi transaction commit.
+        // return drug;
+
+        // Cách 2: explicit:
+        scheduleRepository.saveAll(newSchedules);
+
+        return drug;
+    }
+
+    // ================== DELETE THUỐC ==================
+    @Override
+    @Transactional
+    public void deleteDrug(Long drugInPresId, User user) {
+
+        if (user == null) {
+            throw new IllegalArgumentException("User must not be null when deleting drug");
+        }
+
+        DrugInPrescription drug = drugInPrescriptionRepository.findById(drugInPresId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "DrugInPrescription not found with ID: " + drugInPresId
+                ));
+
+        if (drug.getUser() == null || !drug.getUser().getId().equals(user.getId())) {
+            throw new RuntimeException("Access denied for this drug");
+        }
+
+        // Chỉ cần delete drug, nhờ orphanRemoval nên schedules sẽ bị xoá theo
+        drugInPrescriptionRepository.delete(drug);
+    }
+
 
 
 

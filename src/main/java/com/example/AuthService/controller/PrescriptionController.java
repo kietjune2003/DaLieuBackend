@@ -1,7 +1,9 @@
 package com.example.AuthService.controller;
 
+import com.example.AuthService.dto.request.DrugInPresRequest;
 import com.example.AuthService.dto.request.PrescriptionRequest;
 import com.example.AuthService.dto.request.UpdateScheduleStatusRequest;
+import com.example.AuthService.entity.DrugInPrescription;
 import com.example.AuthService.entity.Prescription;
 import com.example.AuthService.entity.User;
 import com.example.AuthService.repository.UserRepository;
@@ -157,6 +159,55 @@ public class PrescriptionController {
     public Map<String, String> clearAll() {
         prescriptionService.deleteAllPrescriptionsForTesting();
         return Map.of("message", "Đã xoá toàn bộ dữ liệu đơn thuốc (prescription, drug_in_prescriptions, schedules).");
+    }
+
+    // ✅ 1. Tạo đơn thuốc (đã có)
+    @PostMapping("/single-drug")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> createSingleDrug(
+            @RequestBody DrugInPresRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        String email = userDetails.getUsername();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng: " + email));
+
+        DrugInPrescription savedDruginpres = prescriptionService.createSingleDrug(request, user);
+        return ResponseEntity.ok("✅ Đã tạo  thuốc lẻ thành công! ID: " + savedDruginpres.getId());
+    }
+    // ✏️ Cập nhật thuốc (thuốc đơn hoặc thuốc trong đơn)
+    @PutMapping("/drugs/{id}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> updateDrug(
+            @PathVariable("id") Long drugInPresId,
+            @RequestBody DrugInPresRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        // Lấy user từ email giống các API khác
+        String email = userDetails.getUsername();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng: " + email));
+
+        DrugInPrescription updated = prescriptionService.updateDrug(drugInPresId, request, user);
+
+        // Trả về message đơn giản (đúng style create/delete prescription)
+        return ResponseEntity.ok("✅ Đã cập nhật thuốc thành công! ID: " + updated.getId());
+    }
+
+    // 🗑 Xoá thuốc (thuốc đơn hoặc thuốc trong đơn)
+    @DeleteMapping("/drugs/{id}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> deleteDrug(
+            @PathVariable("id") Long drugInPresId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        String email = userDetails.getUsername();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng: " + email));
+
+        prescriptionService.deleteDrug(drugInPresId, user);
+
+        return ResponseEntity.ok("🗑️ Đã xoá thuốc thành công!");
     }
 
 }
