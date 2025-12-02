@@ -1,192 +1,95 @@
-## Important API Endpoints
+## Prescription API Reference
 
-### Auth
+Tài liệu này mô tả toàn bộ API nằm trong `PrescriptionController` cùng nghiệp vụ từ `PrescriptionServiceImpl`. Các endpoint ở dưới đều chạy dưới prefix `/api/prescriptions` và yêu cầu người dùng đã đăng nhập (trừ endpoint xoá dữ liệu test).
 
-#### POST `/api/auth/login`
-- Mô tả: Đăng nhập bằng email và mật khẩu.
-- Body (JSON):
-  - `email`: string (bắt buộc)
-  - `password`: string (bắt buộc)
-- 200 OK: Trả về token.
-- 401: Sai thông tin đăng nhập.
+### DTO sử dụng chung
 
-#### POST `/api/auth/refresh`
-- Mô tả: Cấp mới access token từ refresh token.
-- Body (JSON):
-  - `refreshToken`: string (bắt buộc)
-- 200 OK: Trả về token mới.
-- 401: Refresh token không hợp lệ/hết hạn.
+| DTO | Trường chính |
+| --- | --- |
+| `PrescriptionRequest` | `name`, `hospital`, `doctorName`, `consultationDate`, `followUpDate`, `drugs: DrugInPresRequest[]` |
+| `DrugInPresRequest` | `drug_id` (hoặc `drugName` khi tạo thuốc lẻ), `unit_id`, `start_date`, `end_date`, `note`, `frequency_type` (`DAILY`/`INTERVAL`/`WEEKLY`), `interval_days`, `days_of_week[]`, `schedules[]` (mỗi phần tử có `time` `HH:mm`, `dosage`) |
+| `UpdateScheduleStatusRequest` | `scheduleId`, `status` (0 = bỏ qua, 1 = uống; service tự set 2 nếu uống trễ >10 phút) |
+| `ScheduleResponseDTO` | `scheduleId`, `drugName`, `dosage`, `time`, `status`, `edited`, `prescriptionName` |
+| `ScheduleHistoryDTO` | `date`, `schedules: ScheduleResponseDTO[]` |
+| `PrescriptionSummaryResponse` | `id`, `prescriptionName`, `totalDrugs`, `drugs: DrugSummaryResponse[]` (`drugName`, `nearestTime`) |
 
-#### POST `/api/auth/register/start`
-- Mô tả: Bắt đầu đăng ký bằng OTP email.
-- Body (JSON):
-  - `email`: string (bắt buộc)
-  - `password`: string, tối thiểu 8 ký tự (bắt buộc)
-  - `name`: string (bắt buộc)
-  - `gender`: string (tuỳ chọn)
-  - `phoneNumber`: string (tuỳ chọn)
-  - `dateOfBirth`: string, định dạng `yyyy-MM-dd` (tuỳ chọn)
-  - `countryId`: number (tuỳ chọn)
-  - `photoUrl`: string (tuỳ chọn)
-- 204 No Content: Đã gửi OTP đến email.
-- 400: Dữ liệu không hợp lệ hoặc email đã tồn tại.
-
-#### POST `/api/auth/register/verify`
-- Mô tả: Xác minh OTP và hoàn tất đăng ký.
-- Body (JSON):
-  - `email`: string (bắt buộc)
-  - `code`: string (OTP, bắt buộc)
-- 200 OK: Trả về token sau khi đăng ký thành công.
-- 400/401: OTP không hợp lệ/hết hạn.
-
-#### POST `/api/auth/forgot-password`
-- Mô tả: Yêu cầu OTP đặt lại mật khẩu gửi tới email.
-- Body (JSON):
-  - `email`: string (bắt buộc)
-- 204 No Content: Đã gửi OTP.
-
-#### POST `/api/auth/reset-password`
-- Mô tả: Đặt lại mật khẩu bằng OTP.
-- Body (JSON):
-  - `email`: string (bắt buộc)
-  - `code`: string (OTP, bắt buộc)
-  - `newPassword`: string, tối thiểu 8 ký tự (bắt buộc)
-- 204 No Content: Đặt lại mật khẩu thành công.
-- 400/401: OTP không hợp lệ/hết hạn.
-
-#### GET `/api/auth/login/google`
-- Mô tả: Chuyển hướng sang luồng OAuth2 Google (HTTP 302).
-- Body: không có.
-- 302 Found: Redirect tới `/oauth2/authorization/google`.
-
-#### GET `/api/auth/me`
-- Mô tả: Trả về trạng thái đăng nhập hiện tại và hồ sơ người dùng.
-- Body: không có.
-- Header (tuỳ chọn): `Authorization: Bearer <accessToken>` nếu dùng JWT.
-- 200 OK: Trả về `AuthProfileDto` gồm: `authenticated` (boolean), `provider` (string), `email` (string), `name` (string), `picture` (string), `sub` (string), `authorities` (string[]).
-
-### Drugs
-
-#### GET `/api/drugs`
-- Mô tả: Danh sách thuốc (phân trang, lọc, sắp xếp).
-- Quyền: `USER`, `MODERATOR`, `ADMIN`.
-- Query params:
-  - `q`: string (tuỳ chọn) — tìm theo name/title chứa từ khoá.
-  - `minPrice`: number (tuỳ chọn)
-  - `maxPrice`: number (tuỳ chọn)
-  - `inStock`: boolean (tuỳ chọn)
-  - `hasImage`: boolean (tuỳ chọn)
-  - Phân trang: `page` (number), `size` (number), `sort` (ví dụ: `id,desc`).
-- 200 OK: Trả về `Page<Drug>`.
-
-#### GET `/api/drugs/{id}`
-- Mô tả: Lấy chi tiết 1 thuốc.
-- Quyền: `USER`, `MODERATOR`, `ADMIN`.
-- Path params:
-  - `id`: number (bắt buộc)
-- 200 OK: Trả về `Drug`.
-
-#### GET `/api/drugs/suggest`
-- Mô tả: Gợi ý autocomplete tên thuốc.
-- Quyền: `USER`, `MODERATOR`, `ADMIN`.
-- Query params:
-  - `q`: string (bắt buộc)
-  - `limit`: number (tuỳ chọn, mặc định 10)
-- 200 OK: Trả về danh sách chuỗi tên gợi ý.
-
-### Sections
-
-#### GET `/api/drugs/{drugId}/sections`
-- Mô tả: Danh sách section của một thuốc (không phân trang).
-- Quyền: `USER`, `MODERATOR`, `ADMIN`.
-- Path params:
-  - `drugId`: number (bắt buộc)
-- 200 OK: Trả về `List<Section>`.
-
-#### GET `/api/sections/{id}`
-- Mô tả: Lấy chi tiết 1 section.
-- Quyền: `USER`, `MODERATOR`, `ADMIN`.
-- Path params:
-  - `id`: number (bắt buộc)
-- 200 OK: Trả về `Section`.
-
-### Prescriptions
+### API chi tiết
 
 #### POST `/api/prescriptions`
-- Mô tả: Tạo đơn thuốc mới kèm lịch uống tự động sinh.
-- Quyền: Người dùng đã đăng nhập.
-- Body (JSON `PrescriptionRequest`):
-  - `name`: string (bắt buộc) – tên đơn thuốc.
-  - `hospital`, `doctorName`: string (tuỳ chọn).
-  - `consultationDate`, `followUpDate`: string, `yyyy-MM-dd`.
-  - `drugs`: array (ít nhất 1 phần tử), mỗi phần tử gồm:
-    - `drug_id`, `unit_id`: number (bắt buộc).
-    - `start_date`, `end_date`: string (`yyyy-MM-dd`, có thể bỏ `end_date` → mặc định +7 ngày).
-    - `note`: string.
-    - `frequency_type`: `DAILY` | `INTERVAL` | `WEEKLY`.
-    - `interval_days`: number (khi `frequency_type=INTERVAL`).
-    - `days_of_week`: string[] (ví dụ: `["MONDAY","FRIDAY"]` cho `WEEKLY`).
-    - `schedules`: array (tuỳ chọn) các khung giờ:
-      - `time`: string `HH:mm`.
-      - `dosage`: number (mặc định 1.0 nếu bỏ trống).
-- 200 OK: chuỗi thông báo chứa `ID` đơn thuốc.
-- 400: Thiếu thuốc, thiếu thông tin thuốc hoặc người dùng không hợp lệ.
+- Tạo đơn thuốc mới kèm danh sách thuốc. Service kiểm tra người dùng, validate từng thuốc, lưu prescription rồi sinh schedule tự động dựa trên `frequency_type` và `schedules`.
+- Body: `PrescriptionRequest`.
+- Response 200: `"✅ Đã tạo đơn thuốc thành công! ID: <prescriptionId>"`.
+- 400: Khi thiếu user, không có danh sách thuốc, thiếu `drug_id`/`unit_id`...
 
 #### DELETE `/api/prescriptions/{id}`
-- Mô tả: Xoá đơn thuốc và toàn bộ thuốc/lịch con.
-- Quyền: Người dùng sở hữu đơn.
-- Path params: `id` (number, bắt buộc).
-- 200 OK: Thông báo xoá thành công.
-- 404/403: Không tìm thấy hoặc không có quyền.
+- Xoá đơn thuốc và toàn bộ `DrugInPrescription` + `Schedule` con nhờ cascade.
+- Path: `id` (Long).
+- Response 200: `"🗑️ Đã xoá đơn thuốc thành công!"`.
 
 #### GET `/api/prescriptions/status/{status}`
-- Mô tả: Danh sách đơn theo trạng thái (0 = ẩn, 1 = hiển thị).
-- Quyền: Người dùng sở hữu.
-- Path params: `status`: number.
-- 200 OK: `PrescriptionSummaryResponse[]` gồm:
-  - `id`, `prescriptionName`, `totalDrugs`,
-  - `drugs`: `[{ "drugName": string, "nearestTime": ISO datetime|null }]`.
+- Lọc đơn theo trạng thái (0 = ẩn, 1 = hiển thị). Kết quả được sắp theo `createdAt` giảm dần.
+- Response 200: `PrescriptionSummaryResponse[]`.
 
 #### PUT `/api/prescriptions/{id}`
-- Mô tả: Cập nhật thông tin, danh sách thuốc và lịch (xoá toàn bộ cũ rồi tạo lại).
-- Quyền: Người dùng sở hữu.
-- Body: Giống `PrescriptionRequest`.
-- 200 OK: Trả về nội dung đơn thuốc mới (`PrescriptionRequest`).
+- Ghi đè toàn bộ thông tin đơn và danh sách thuốc. Service xoá dữ liệu cũ (bao gồm schedule) rồi tạo lại bằng payload mới.
+- Body: `PrescriptionRequest`.
+- Response 200: Payload đã lưu (kiểu `PrescriptionRequest`).
 
 #### GET `/api/prescriptions/{id}`
-- Mô tả: Lấy chi tiết đơn thuốc để hiển thị lại form chỉnh sửa.
-- Quyền: Người dùng sở hữu.
-- 200 OK: `PrescriptionRequest` (bao gồm `drugs[].schedules[]` theo giờ).
+- Trả về đơn thuốc dưới dạng `PrescriptionRequest` để fill form edit. Service convert entity → DTO và gộp `Schedule` theo giờ để tạo `drugs[].schedules[]`.
+- Response 200: `PrescriptionRequest`.
 
 #### PUT `/api/prescriptions/{id}/status`
-- Mô tả: Chuyển trạng thái đơn (1↔0).
-- Quyền: Người dùng sở hữu.
-- 200 OK: Chuỗi thông báo kèm trạng thái mới.
+- Đảo trạng thái đơn (1↔0).
+- Response 200: `"✅ Đã thay đổi trạng thái đơn thuốc ID <id> → status = <status>"`.
 
 #### GET `/api/prescriptions/schedules`
-- Mô tả: Lấy tất cả liều uống trong ngày.
-- Quyền: Người dùng sở hữu.
-- Query params: `date` (string `yyyy-MM-dd`, bắt buộc).
-- 200 OK:
-  - Nếu ngày quá khứ: `{ "message": "..." }`.
-  - Nếu hợp lệ: `ScheduleResponseDTO[]` gồm `scheduleId`, `drugName`, `dosage`, `time`, `status` (0=chưa uống, 1=đúng giờ, 2=uống trễ), `edited`, `prescriptionName`.
+- Lấy tất cả liều uống trong một ngày.
+- Query: `date` (`yyyy-MM-dd`, bắt buộc).
+- Response:
+  - Nếu ngày < hôm nay: `{ "message": "Ngày bạn chọn đã ở trong quá khứ, không có liều uống nào." }`
+  - Ngược lại: `ScheduleResponseDTO[]` (sắp xếp theo giờ).
 
 #### PUT `/api/prescriptions/schedules/status`
-- Mô tả: Ghi nhận đã uống/chưa uống 1 lịch.
-- Quyền: Người dùng sở hữu.
-- Body (`UpdateScheduleStatusRequest`):
-  - `scheduleId`: number (bắt buộc).
-  - `status`: number (`0` = bỏ qua, `1` = xác nhận uống; hệ thống tự đổi 1→2 nếu trễ >10 phút).
-- 200 OK: `{ "message": string }`.
+- Đánh dấu đã/không uống một lịch cụ thể. Service kiểm tra quyền sở hữu, set `edited = true`, gán `status = 0/1/2`.
+- Body: `UpdateScheduleStatusRequest`.
+- Response 200: `{ "message": "Đã cập nhật: Không uống thuốc." }` hoặc `"Đã xác nhận uống thuốc."`.
 
 #### GET `/api/prescriptions/schedules/history`
-- Mô tả: Lịch sử uống thuốc đã xác nhận (`edited = true`) kèm thống kê.
-- Quyền: Người dùng sở hữu.
-- Query params (tuỳ chọn):
-  - `filter`: `7days` | `month` (bắt buộc kèm `year`, `month`) | bỏ trống = toàn bộ.
-  - `year`, `month`: number (khi `filter=month`).
-- 200 OK: Object:
-  - `history`: `ScheduleHistoryDTO[]` (`date`, `schedules[]` theo cấu trúc `ScheduleResponseDTO`).
-  - `statistics`: `{ "totalTaken", "onTime", "late", "skipped" }`.
+- Lịch sử các lịch đã chỉnh (`edited = true`) kèm thống kê.
+- Query:
+  - `filter`: `7days` hoặc `month`
+  - `year`, `month`: bắt buộc khi `filter=month`
+- Response 200:
+  ```json
+  {
+    "history": [ ScheduleHistoryDTO, ... ],
+    "statistics": {
+      "totalTaken": number,
+      "onTime": number,
+      "late": number,
+      "skipped": number
+    }
+  }
+  ```
 
+#### DELETE `/api/prescriptions/clear-all`
+- Dùng trong môi trường test để xoá sạch toàn bộ `Schedule`, `DrugInPrescription`, `Prescription`.
+- Response 200: `{ "message": "Đã xoá toàn bộ dữ liệu đơn thuốc (prescription, drug_in_prescriptions, schedules)." }`.
+
+#### POST `/api/prescriptions/single-drug`
+- Tạo một thuốc lẻ chỉ gắn với user (không thuộc đơn nào). Service yêu cầu `unit_id`, `start_date`, tự sinh schedule giống createPrescription.
+- Body: `DrugInPresRequest` (dùng `drugName` nếu không chọn từ kho thuốc).
+- Response 200: `"✅ Đã tạo  thuốc lẻ thành công! ID: <drugInPresId>"`.
+
+#### PUT `/api/prescriptions/drugs/{id}`
+- Cập nhật bản ghi `DrugInPrescription` bất kỳ (thuốc trong đơn hoặc thuốc lẻ). Service validate quyền dựa trên `drug.user`, cập nhật thông tin, xoá schedule cũ, generate mới.
+- Path: `id`.
+- Body: `DrugInPresRequest`.
+- Response 200: `"✅ Đã cập nhật thuốc thành công! ID: <id>"`.
+
+#### DELETE `/api/prescriptions/drugs/{id}`
+- Xoá một `DrugInPrescription` và schedule liên quan (nhờ orphan removal).
+- Path: `id`.
+- Response 200: `"🗑️ Đã xoá thuốc thành công!".
 
