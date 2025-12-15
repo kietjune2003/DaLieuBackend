@@ -5,6 +5,9 @@ import com.example.AuthService.entity.Prescription;
 import com.example.AuthService.entity.Schedule;
 import com.example.AuthService.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -18,4 +21,13 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
     void deleteByDrugInPrescription(DrugInPrescription drugInPrescription);
 
     List<Schedule> findByEdittedTrue();
+    @Modifying
+    @Query("""
+        UPDATE Schedule s
+        SET s.editted = true
+        WHERE s.date < :todayStart
+          AND s.editted = false
+    """)
+    int autoMarkSkipped(@Param("todayStart") LocalDateTime todayStart);
+
 }
