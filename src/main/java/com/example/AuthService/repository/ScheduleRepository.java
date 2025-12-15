@@ -16,4 +16,6 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
     List<Schedule> findByDateBetween(LocalDateTime start, LocalDateTime end);
     List<Schedule> findByEdittedTrueAndDrugInPrescription_Prescription_User(User user);
     void deleteByDrugInPrescription(DrugInPrescription drugInPrescription);
+
+    List<Schedule> findByEdittedTrue();
 }
