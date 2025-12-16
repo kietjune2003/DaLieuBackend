@@ -19,8 +19,8 @@ public class DrugSpecifications {
                 if (StringUtils.hasText(f.getQ())) {
                     String like = "%" + f.getQ().toLowerCase().trim() + "%";
                     ps.add(cb.or(
-                            cb.like(cb.lower(root.get("name")), like),
-                            cb.like(cb.lower(root.get("title")), like)
+                            cb.like(cb.lower(root.get("name")), like)
+
                     ));
                 }
                 if (f.getMinPrice() != null) {
