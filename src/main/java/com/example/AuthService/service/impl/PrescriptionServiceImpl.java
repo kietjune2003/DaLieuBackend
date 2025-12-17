@@ -497,6 +497,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         ScheduleResponseDTO dto = new ScheduleResponseDTO();
 
+
         dto.setScheduleId(schedule.getId());
         dto.setDosage(schedule.getDosage());
         dto.setStatus(schedule.getStatus());
@@ -510,7 +511,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
 
         DrugInPrescription dip = schedule.getDrugInPrescription();
-
+        dto.setNote(dip.getNote());
+        dto.setUnitName(dip.getUnit().getName());
         if (dip != null) {
             dto.setDrugName(dip.getDrugName());
 

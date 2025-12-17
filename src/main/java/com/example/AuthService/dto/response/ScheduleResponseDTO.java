@@ -14,4 +14,6 @@ public class ScheduleResponseDTO {
     private int status;
     private boolean edited;
     private String prescriptionName;
+    private String unitName;
+    private String note;
 }
