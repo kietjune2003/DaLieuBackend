@@ -497,40 +497,43 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         ScheduleResponseDTO dto = new ScheduleResponseDTO();
 
-
+        // ====== SCHEDULE ======
         dto.setScheduleId(schedule.getId());
         dto.setDosage(schedule.getDosage());
         dto.setStatus(schedule.getStatus());
         dto.setEdited(schedule.isEditted());
 
-        // time
         if (schedule.getDate() != null) {
             dto.setTime(schedule.getDate().toLocalTime().toString());
-        } else {
-            dto.setTime(null);
         }
 
+        // ====== DRUG IN PRESCRIPTION ======
         DrugInPrescription dip = schedule.getDrugInPrescription();
-        dto.setNote(dip.getNote());
-        dto.setUnitName(dip.getUnit().getName());
-        if (dip != null) {
-            dto.setDrugName(dip.getDrugName());
-
-            if (dip.getPrescription() != null) {
-                dto.setPrescriptionName(dip.getPrescription().getName());
-            } else {
-                // 🔥 prescription = null là hợp lệ
-                dto.setPrescriptionName(null);
-                // hoặc: "Chưa gán đơn thuốc"
-            }
-        } else {
-            // Trường hợp rất hiếm nhưng vẫn nên bảo vệ
-            dto.setDrugName(null);
-            dto.setPrescriptionName(null);
+        if (dip == null) {
+            return dto; // cực hiếm, nhưng phòng thủ
         }
+
+        dto.setDrugName(dip.getDrugName());
+        dto.setNote(dip.getNote());
+
+        // Unit
+        if (dip.getUnit() != null) {
+            dto.setUnitName(dip.getUnit().getName());
+        }
+
+        // Prescription (nullable là hợp lệ)
+        if (dip.getPrescription() != null) {
+            dto.setPrescriptionName(dip.getPrescription().getName());
+        }
+
+        // ====== TẦN SUẤT UỐNG THUỐC ======
+        dto.setFrequencyType(dip.getFrequencyType());
+        dto.setIntervalDays(dip.getIntervalDays());
+        dto.setDaysOfWeek(dip.getDaysOfWeek());
 
         return dto;
     }
+
 
 
 
