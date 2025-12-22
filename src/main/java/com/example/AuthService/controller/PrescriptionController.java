@@ -209,5 +209,45 @@ public class PrescriptionController {
 
         return ResponseEntity.ok("🗑️ Đã xoá thuốc thành công!");
     }
+    //  Lấy danh sách thuốc lẻ theo trạng thái
+    @GetMapping("/single-drug/status/{status}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> getSingleDrugs(
+            @PathVariable Integer status,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        String email = userDetails.getUsername();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng: " + email));
+
+        return ResponseEntity.ok(prescriptionService.getSingleDrugs(user, status));
+    }
+    // Đổi trạng thái thuốc lẻ (1 -> 0 hoặc 0 -> 1)
+    @PutMapping("/single-drug/{id}/status")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> toggleSingleDrugStatus(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        String email = userDetails.getUsername();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng: " + email));
+
+        DrugInPrescription updated = prescriptionService.toggleSingleDrugStatus(id, user);
+        return ResponseEntity.ok(" Đã thay đổi trạng thái đơn thuốc ID " + id + " → status = " + updated.getStatus());
+    }
+    @GetMapping("/single-drug/{id}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> getSingleDrugDetail(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        User user = userRepository.findByEmail(userDetails.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        return ResponseEntity.ok(
+                prescriptionService.getSingleDrugAsRequest(id, user)
+        );
+    }
 
 }

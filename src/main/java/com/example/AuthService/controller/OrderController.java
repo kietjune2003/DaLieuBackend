@@ -1,0 +1,59 @@
+package com.example.AuthService.controller;
+
+import com.example.AuthService.dto.request.CreateOrderRequest;
+import com.example.AuthService.entity.Order;
+import com.example.AuthService.entity.User;
+import com.example.AuthService.repository.UserRepository;
+import com.example.AuthService.service.OrderService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/orders")
+@RequiredArgsConstructor
+public class OrderController {
+
+    private final OrderService orderService;
+    private final UserRepository userRepository;
+
+    // ✅ 1. USER tạo order (JWT)
+    @PostMapping
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> createOrder(
+            @RequestBody CreateOrderRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        String email = userDetails.getUsername();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() ->
+                        new RuntimeException("Không tìm thấy user: " + email));
+
+        Order order = orderService.createOrder(request, user);
+
+        return ResponseEntity.ok(
+                "✅ Tạo đơn hàng thành công! Order ID: " + order.getId()
+        );
+    }
+    // ✅ 2. User xác nhận thanh toán COD
+    @PostMapping("/{orderId}/confirm-cod")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> confirmCodPayment(
+            @PathVariable Long orderId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        String email = userDetails.getUsername();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() ->
+                        new RuntimeException("Không tìm thấy user: " + email));
+
+        Order order = orderService.confirmCodPayment(orderId, user);
+
+        return ResponseEntity.ok(
+                "✅ Đã xác nhận COD cho đơn hàng ID: " + order.getId()
+        );
+    }
+}

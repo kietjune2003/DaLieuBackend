@@ -1,10 +1,9 @@
 package com.example.AuthService.service;
 
 import com.example.AuthService.dto.request.DrugInPresRequest;
-import com.example.AuthService.dto.request.ScheduleHistoryDTO;
 import com.example.AuthService.dto.request.UpdateScheduleStatusRequest;
 import com.example.AuthService.dto.response.PrescriptionSummaryResponse;
-import com.example.AuthService.dto.response.ScheduleResponseDTO;
+import com.example.AuthService.dto.response.SingleDrugResponse;
 import com.example.AuthService.entity.DrugInPrescription;
 import com.example.AuthService.entity.Prescription;
 import com.example.AuthService.entity.User;
@@ -33,4 +32,14 @@ public interface PrescriptionService {
 
     // 🔹 Xoá thuốc (đơn hoặc trong đơn)
     void deleteDrug(Long drugInPresId, User user);
+
+    @Transactional
+    DrugInPrescription toggleSingleDrugStatus(Long id, User user);
+
+    List<SingleDrugResponse> getSingleDrugs(User user, Integer status);
+
+    DrugInPresRequest mapDrugInPrescriptionToRequest(DrugInPrescription dip);
+
+    @Transactional(readOnly = true)
+    DrugInPresRequest getSingleDrugAsRequest(Long drugId, User user);
 }

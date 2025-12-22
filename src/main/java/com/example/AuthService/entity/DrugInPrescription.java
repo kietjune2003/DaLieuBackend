@@ -1,5 +1,6 @@
 package com.example.AuthService.entity;
 
+
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -53,4 +54,7 @@ public class DrugInPrescription extends BaseEntity {
 
     @OneToMany(mappedBy = "drugInPrescription", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Schedule> schedules = new ArrayList<>();
+    private Integer status = 1; //active
+
+
 }

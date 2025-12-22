@@ -41,6 +41,7 @@ public class Prescription extends BaseEntity {
     @OneToMany(mappedBy = "prescription", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<DrugInPrescription> drugInPrescriptions = new ArrayList<>();
 
-    private Integer status = 1;
+    private Integer status = 1; //active
+
 
 }

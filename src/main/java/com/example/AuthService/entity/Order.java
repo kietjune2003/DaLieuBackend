@@ -1,10 +1,12 @@
 package com.example.AuthService.entity;
 
+import com.example.AuthService.enums.PaymentMethod;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import com.example.AuthService.enums.OrderStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,7 +24,7 @@ public class Order {
     @JoinColumn(name = "user_id")
     private User user;
 
-    private Double totalAmount;
+    private BigDecimal totalAmount;
 
     @Enumerated(EnumType.STRING)
     private OrderStatus status;
@@ -38,4 +40,10 @@ public class Order {
         createdAt = LocalDateTime.now();
         status = OrderStatus.PENDING;
     }
+    private String shippingAddress;
+    private String receiverName;
+    private String receiverPhone;
+    @Enumerated(EnumType.STRING)
+    private PaymentMethod paymentMethod;
+
 }

@@ -4,6 +4,7 @@ import com.example.AuthService.dto.request.*;
 import com.example.AuthService.dto.response.DrugSummaryResponse;
 import com.example.AuthService.dto.response.PrescriptionSummaryResponse;
 import com.example.AuthService.dto.response.ScheduleResponseDTO;
+import com.example.AuthService.dto.response.SingleDrugResponse;
 import com.example.AuthService.entity.*;
 import com.example.AuthService.enums.FrequencyType;
 import com.example.AuthService.repository.*;
@@ -560,7 +561,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                     if (p == null) return true;
 
                     User u = p.getUser();
-                    return u != null && u.getId().equals(user.getId());
+                    return u != null
+                            && u.getId().equals(user.getId())
+                            && Integer.valueOf(1).equals(p.getStatus());
                 })
                 .sorted(Comparator.comparing(s -> s.getDate().toLocalTime()))
                 .toList();
@@ -603,14 +606,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // ✔ Luôn set editted
         schedule.setEditted(true);
 
-        // ✔ STATUS = 0 (KHÔNG UỐNG)
+        // STATUS = 0 (KHÔNG UỐNG)
         if (request.getStatus() == 0) {
             schedule.setStatus(0);
             scheduleRepository.save(schedule);
             return Map.of("message", "Đã cập nhật: Không uống thuốc.");
         }
 
-        // ✔ STATUS = 1 (CÓ UỐNG)
+        // STATUS = 1 (CÓ UỐNG)
         if (request.getStatus() == 1) {
 
             LocalDateTime scheduleTime = schedule.getDate();
@@ -673,9 +676,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                     .toList();
         }
 
-        // ================================
-        // 📅 GROUP THEO NGÀY
-        // ================================
+
+        // GROUP THEO NGÀY
+
         Map<LocalDate, List<Schedule>> grouped =
                 schedules.stream()
                         .collect(Collectors.groupingBy(
@@ -793,6 +796,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         return savedDrugInPres;
     }
+
     @Override
     @Transactional
     public DrugInPrescription updateDrug(Long drugInPresId,
@@ -902,6 +906,124 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         drugInPrescriptionRepository.delete(drug);
     }
 
+    @Transactional
+    @Override
+    public DrugInPrescription toggleSingleDrugStatus(Long id, User user) {
+
+        DrugInPrescription dip = drugInPrescriptionRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy thuốc trong đơn"));
+
+        // Kiểm tra quyền sở hữu
+        if (!dip.getUser().getId().equals(user.getId())) {
+            throw new RuntimeException("Bạn không có quyền thay đổi trạng thái đơn thuốc này");
+        }
+
+        // Đảo trạng thái: 1 -> 0, 0 -> 1
+        dip.setStatus(
+                Integer.valueOf(1).equals(dip.getStatus()) ? 0 : 1
+        );
+
+        return drugInPrescriptionRepository.save(dip);
+    }
+
+    @Override
+    public List<SingleDrugResponse> getSingleDrugs(User user, Integer status) {
+
+        List<DrugInPrescription> drugs =
+                drugInPrescriptionRepository
+                        .findByUserAndPrescriptionIsNullAndStatus(user, status);
+
+        LocalDateTime now = LocalDateTime.now();
+
+        return drugs.stream()
+                .map(dip -> {
+                    String drugName = dip.getDrugName();
+                    if (drugName == null || drugName.isBlank()) {
+                        drugName = "Thuốc không tên";
+                    }
+
+                    LocalDateTime nearest = dip.getSchedules() == null
+                            ? null
+                            : dip.getSchedules().stream()
+                            .map(Schedule::getDate)
+                            .filter(date -> !date.isBefore(now))
+                            .min(LocalDateTime::compareTo)
+                            .orElse(null);
+
+                    return new SingleDrugResponse(
+                            dip.getId(),
+                            drugName,
+                            nearest
+                    );
+                })
+                .sorted(Comparator.comparing(
+                        SingleDrugResponse::getNearestTime,
+                        Comparator.nullsLast(Comparator.naturalOrder())
+                ))
+                .toList();
+    }
+
+    public DrugInPresRequest mapDrugInPrescriptionToRequest(DrugInPrescription dip) {
+
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ISO_LOCAL_DATE;
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
+
+        DrugInPresRequest dReq = DrugInPresRequest.builder()
+                .drugName(dip.getDrugName())
+                .unitId(dip.getUnit() != null ? dip.getUnit().getId() : null)
+                .startDate(dip.getStartDate() != null
+                        ? dip.getStartDate().format(dateFormatter)
+                        : null)
+                .endDate(dip.getEndDate() != null
+                        ? dip.getEndDate().format(dateFormatter)
+                        : null)
+                .note(dip.getNote())
+                .frequencyType(dip.getFrequencyType())
+                .intervalDays(dip.getIntervalDays())
+                .daysOfWeek(dip.getDaysOfWeek() != null
+                        ? new ArrayList<>(dip.getDaysOfWeek())
+                        : new ArrayList<>())
+                .schedules(new ArrayList<>())
+                .build();
+
+        // gộp schedule theo giờ
+        Map<LocalTime, Double> timeToDosage = new HashMap<>();
+        if (dip.getSchedules() != null) {
+            for (Schedule s : dip.getSchedules()) {
+                if (s == null || s.getDate() == null) continue;
+                LocalTime time = s.getDate().toLocalTime();
+                timeToDosage.putIfAbsent(time, s.getDosage());
+            }
+        }
+
+        List<ScheduleAddRequest> schedules = timeToDosage.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(e -> {
+                    ScheduleAddRequest sa = new ScheduleAddRequest();
+                    sa.setTime(e.getKey().format(timeFormatter));
+                    sa.setDosage(e.getValue() != null ? e.getValue() : 1.0);
+                    return sa;
+                })
+                .toList();
+
+        dReq.setSchedules(new ArrayList<>(schedules));
+
+        return dReq;
+    }
+    @Transactional(readOnly = true)
+    @Override
+    public DrugInPresRequest getSingleDrugAsRequest(Long drugId, User user) {
+
+        DrugInPrescription dip = drugInPrescriptionRepository.findById(drugId)
+                .orElseThrow(() -> new RuntimeException("Drug not found"));
+
+        // check owner
+        if (!dip.getUser().getId().equals(user.getId())) {
+            throw new RuntimeException("Access denied");
+        }
+
+        return mapDrugInPrescriptionToRequest(dip);
+    }
 
 
 
