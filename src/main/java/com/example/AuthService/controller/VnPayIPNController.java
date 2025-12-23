@@ -2,11 +2,9 @@ package com.example.AuthService.controller;
 
 import com.example.AuthService.service.PaymentService;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -19,17 +17,35 @@ public class VnPayIPNController {
         this.paymentService = paymentService;
     }
 
-    // VNPay gọi POST
-    @PostMapping("/ipn")
-    public ResponseEntity<String> receiveIPN(@RequestParam Map<String, String> params) {
-
+//    // VNPay gọi POST
+//    @PostMapping("/ipn")
+//    public ResponseEntity<String> receiveIPN(@RequestParam Map<String, String> params) {
+//
+//        boolean success = paymentService.handleVnpayIPN(params);
+//
+//        // VNPay yêu cầu trả về code
+//        if (success) {
+//            return ResponseEntity.ok("vnp_ResponseCode=00");
+//        } else {
+//            return ResponseEntity.ok("vnp_ResponseCode=97"); // thất bại
+//        }
+//    }
+    @GetMapping("/ipn")
+    public ResponseEntity<Map<String, String>> receiveIPN(
+            @RequestParam Map<String, String> params
+    ) {
         boolean success = paymentService.handleVnpayIPN(params);
 
-        // VNPay yêu cầu trả về code
+        Map<String, String> response = new HashMap<>();
+
         if (success) {
-            return ResponseEntity.ok("vnp_ResponseCode=00");
+            response.put("RspCode", "00");
+            response.put("Message", "Confirm Success");
         } else {
-            return ResponseEntity.ok("vnp_ResponseCode=97"); // thất bại
+            response.put("RspCode", "97");
+            response.put("Message", "Confirm Failed");
         }
+
+        return ResponseEntity.ok(response);
     }
 }

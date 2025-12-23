@@ -145,9 +145,13 @@ public class PaymentServiceImpl implements PaymentService {
         });
 
         StringBuilder hashData = new StringBuilder();
-        sortedParams.forEach((k, v) ->
-                hashData.append(k).append("=").append(v).append("&")
-        );
+
+        sortedParams.forEach((k, v) -> {
+            hashData.append(k)
+                    .append("=")
+                    .append(URLEncoder.encode(v, StandardCharsets.UTF_8))
+                    .append("&");
+        });
 
         hashData.deleteCharAt(hashData.length() - 1);
 
@@ -156,17 +160,17 @@ public class PaymentServiceImpl implements PaymentService {
 
         return calculatedHash.equalsIgnoreCase(receivedHash);
     }
+
     @Override
-    @Transactional
     public boolean handleVnpayReturn(Map<String, String> params) {
 
         if (!verifySignature(params)) {
             throw new RuntimeException("Sai chữ ký VNPay");
         }
 
-        // Chỉ trả kết quả cho frontend hiển thị
         return "00".equals(params.get("vnp_ResponseCode"));
     }
+
 
     @Override
     @Transactional
