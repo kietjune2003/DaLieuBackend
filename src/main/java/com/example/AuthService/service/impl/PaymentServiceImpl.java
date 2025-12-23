@@ -164,37 +164,10 @@ public class PaymentServiceImpl implements PaymentService {
             throw new RuntimeException("Sai chữ ký VNPay");
         }
 
-        String txnRef = params.get("vnp_TxnRef");
-        String responseCode = params.get("vnp_ResponseCode");
-        String transactionNo = params.get("vnp_TransactionNo");
-
-        Payment payment = paymentRepository.findByVnpTxnRef(txnRef)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy payment"));
-
-        // chống double callback
-        if (payment.getStatus() == PaymentStatus.SUCCESS) {
-            return true;
-        }
-
-        if ("00".equals(responseCode)) {
-
-            payment.setStatus(PaymentStatus.SUCCESS);
-            payment.setVnpTransactionNo(transactionNo);
-            payment.setPaidAt(LocalDateTime.now());
-
-            Order order = payment.getOrder();
-            order.setStatus(OrderStatus.PAID);
-
-            orderRepository.save(order);
-            paymentRepository.save(payment);
-
-            return true;
-        }
-
-        payment.setStatus(PaymentStatus.FAILED);
-        paymentRepository.save(payment);
-        return false;
+        // Chỉ trả kết quả cho frontend hiển thị
+        return "00".equals(params.get("vnp_ResponseCode"));
     }
+
     @Override
     @Transactional
     public boolean handleVnpayIPN(Map<String, String> params) {
@@ -212,12 +185,9 @@ public class PaymentServiceImpl implements PaymentService {
 
         if (payment == null) return false;
 
-        if (payment.getStatus() == PaymentStatus.SUCCESS) {
-            return true;
-        }
-
         Order order = payment.getOrder();
 
+        // ===== CHECK AMOUNT =====
         long amountFromVnpay = Long.parseLong(params.get("vnp_Amount"));
         long orderAmount = order.getTotalAmount()
                 .multiply(BigDecimal.valueOf(100))
@@ -229,9 +199,15 @@ public class PaymentServiceImpl implements PaymentService {
             return false;
         }
 
+        // ===== CHỈ XỬ LÝ KHI SUCCESS =====
         if ("00".equals(responseCode)) {
 
-            // 🔥 TRỪ KHO NGAY KHI VNPAY SUCCESS
+            // 🔒 CHỐNG CALLBACK LẶP
+            if (payment.getStatus() == PaymentStatus.SUCCESS) {
+                return true;
+            }
+
+            // 🔥 TRỪ KHO
             for (OrderItem item : order.getItems()) {
                 Drug drug = item.getDrug();
 
@@ -245,10 +221,12 @@ public class PaymentServiceImpl implements PaymentService {
                 drugRepository.save(drug);
             }
 
+            // ===== UPDATE PAYMENT =====
             payment.setStatus(PaymentStatus.SUCCESS);
             payment.setVnpTransactionNo(transactionNo);
             payment.setPaidAt(LocalDateTime.now());
 
+            // ===== UPDATE ORDER =====
             order.setStatus(OrderStatus.PAID);
             order.setPaymentMethod(PaymentMethod.VNPAY);
 
@@ -258,10 +236,12 @@ public class PaymentServiceImpl implements PaymentService {
             return true;
         }
 
+        // ===== FAILED =====
         payment.setStatus(PaymentStatus.FAILED);
         paymentRepository.save(payment);
         return false;
     }
+
 
 
 
