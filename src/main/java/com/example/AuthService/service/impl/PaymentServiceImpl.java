@@ -1,5 +1,5 @@
 package com.example.AuthService.service.impl;
-
+import jakarta.servlet.http.HttpServletRequest;
 import com.example.AuthService.entity.*;
 import com.example.AuthService.enums.OrderStatus;
 import com.example.AuthService.enums.PaymentMethod;
@@ -45,8 +45,18 @@ public class PaymentServiceImpl implements PaymentService {
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
     private final DrugRepository drugRepository;
+
+    private String getClientIp(HttpServletRequest request) {
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip != null && !ip.isEmpty() && !"unknown".equalsIgnoreCase(ip)) {
+            return ip.split(",")[0];
+        }
+        return request.getRemoteAddr();
+    }
+
+
     @Override
-    public String createVnPayPayment(Long orderId, User user) {
+    public String createVnPayPayment(Long orderId, User user, HttpServletRequest request) {
 
         // ===== 1. Validate nghiệp vụ =====
         Order order = orderRepository.findById(orderId)
@@ -77,7 +87,7 @@ public class PaymentServiceImpl implements PaymentService {
         long vnpAmount = order.getTotalAmount()
                 .multiply(BigDecimal.valueOf(100))
                 .longValue();
-
+        String clientIp = getClientIp(request);
         // ===== 5. Params gửi VNPAY (KHÔNG encode) =====
         Map<String, String> vnpParams = new HashMap<>();
         vnpParams.put("vnp_Version", "2.1.0");
@@ -90,7 +100,7 @@ public class PaymentServiceImpl implements PaymentService {
         vnpParams.put("vnp_OrderType", "other");
         vnpParams.put("vnp_Locale", "vn");
         vnpParams.put("vnp_ReturnUrl", returnUrl);
-        vnpParams.put("vnp_IpAddr", "127.0.0.1"); // ⭐ BẮT BUỘC
+        vnpParams.put("vnp_IpAddr", clientIp); // ⭐ BẮT BUỘC
         vnpParams.put("vnp_CreateDate",
                 DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(LocalDateTime.now()));
         vnpParams.put("vnp_ExpireDate",

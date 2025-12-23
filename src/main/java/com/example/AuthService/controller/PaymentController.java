@@ -3,6 +3,7 @@ package com.example.AuthService.controller;
 import com.example.AuthService.entity.User;
 import com.example.AuthService.repository.UserRepository;
 import com.example.AuthService.service.PaymentService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,12 +26,13 @@ public class PaymentController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> createVnPayPayment(
             @PathVariable Long orderId,
+            HttpServletRequest request,
             @AuthenticationPrincipal UserDetails userDetails) {
 
         User user = userRepository.findByEmail(userDetails.getUsername())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy user"));
 
-        String paymentUrl = paymentService.createVnPayPayment(orderId, user);
+        String paymentUrl = paymentService.createVnPayPayment(orderId, user, request);
 
         return ResponseEntity.ok(Map.of(
                 "paymentUrl", paymentUrl
