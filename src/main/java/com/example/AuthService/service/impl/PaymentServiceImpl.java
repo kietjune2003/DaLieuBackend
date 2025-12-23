@@ -1,15 +1,13 @@
 package com.example.AuthService.service.impl;
 
-import com.example.AuthService.entity.Order;
-import com.example.AuthService.entity.Payment;
-import com.example.AuthService.entity.User;
+import com.example.AuthService.entity.*;
 import com.example.AuthService.enums.OrderStatus;
 import com.example.AuthService.enums.PaymentMethod;
 import com.example.AuthService.enums.PaymentStatus;
+import com.example.AuthService.repository.DrugRepository;
 import com.example.AuthService.repository.OrderRepository;
 import com.example.AuthService.repository.PaymentRepository;
 import com.example.AuthService.service.PaymentService;
-import com.example.AuthService.util.HmacUtil;
 import com.example.AuthService.util.VnPayUtil;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +16,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
@@ -44,14 +44,14 @@ public class PaymentServiceImpl implements PaymentService {
 
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
-
+    private final DrugRepository drugRepository;
     @Override
     public String createVnPayPayment(Long orderId, User user) {
 
+        // ===== 1. Validate nghiệp vụ =====
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy order"));
 
-        // check owner
         if (!order.getUser().getId().equals(user.getId())) {
             throw new RuntimeException("Không có quyền với đơn này");
         }
@@ -60,11 +60,10 @@ public class PaymentServiceImpl implements PaymentService {
             throw new RuntimeException("Order không ở trạng thái PENDING");
         }
 
-        // Sinh mã giao dịch nội bộ
+        // ===== 2. Tạo mã giao dịch =====
         String txnRef = UUID.randomUUID().toString().replace("-", "");
 
-
-
+        // ===== 3. Lưu payment =====
         Payment payment = Payment.builder()
                 .order(order)
                 .amount(order.getTotalAmount())
@@ -72,33 +71,53 @@ public class PaymentServiceImpl implements PaymentService {
                 .status(PaymentStatus.PENDING)
                 .vnpTxnRef(txnRef)
                 .build();
-
         paymentRepository.save(payment);
 
-        // VNPay yêu cầu nhân 100
-        BigDecimal vnpAmount = order.getTotalAmount().multiply(BigDecimal.valueOf(100));
+        // ===== 4. Amount (x100) =====
+        long vnpAmount = order.getTotalAmount()
+                .multiply(BigDecimal.valueOf(100))
+                .longValue();
 
-        Map<String, String> params = new HashMap<>();
-        params.put("vnp_Version", "2.1.0");
-        params.put("vnp_Command", "pay");
-        params.put("vnp_TmnCode", tmnCode);
-        params.put("vnp_Amount", String.valueOf(vnpAmount));
-        params.put("vnp_CurrCode", "VND");
-        params.put("vnp_TxnRef", txnRef);
-        params.put("vnp_OrderInfo", "Thanh toan don hang " + order.getId());
-        params.put("vnp_OrderType", "billpayment");
-        params.put("vnp_Locale", "vn");
-        params.put("vnp_ReturnUrl", returnUrl);
-        params.put("vnp_IpAddr", "127.0.0.1");
-        params.put("vnp_CreateDate",
-                DateTimeFormatter.ofPattern("yyyyMMddHHmmss")
-                        .format(LocalDateTime.now()));
+        // ===== 5. Params gửi VNPAY (KHÔNG encode) =====
+        Map<String, String> vnpParams = new HashMap<>();
+        vnpParams.put("vnp_Version", "2.1.0");
+        vnpParams.put("vnp_Command", "pay");
+        vnpParams.put("vnp_TmnCode", tmnCode);
+        vnpParams.put("vnp_Amount", String.valueOf(vnpAmount));
+        vnpParams.put("vnp_CurrCode", "VND");
+        vnpParams.put("vnp_TxnRef", txnRef);
+        vnpParams.put("vnp_OrderInfo", "Thanh_toan_don_hang_" + order.getId());
+        vnpParams.put("vnp_OrderType", "other");
+        vnpParams.put("vnp_Locale", "vn");
+        vnpParams.put("vnp_ReturnUrl", returnUrl);
+        vnpParams.put("vnp_IpAddr", "127.0.0.1"); // ⭐ BẮT BUỘC
+        vnpParams.put("vnp_CreateDate",
+                DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(LocalDateTime.now()));
+        vnpParams.put("vnp_ExpireDate",
+                DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(LocalDateTime.now().plusMinutes(15)));
 
-        String query = VnPayUtil.buildQuery(params);
-        String secureHash = VnPayUtil.hmacSHA512(hashSecret, query);
+        vnpParams.put("vnp_SecureHashType", "HmacSHA512");
 
-        return payUrl + "?" + query + "&vnp_SecureHash=" + secureHash;
+
+        // ===== 6. Params dùng để KÝ HASH (LOẠI BỎ 2 PARAM CẤM) =====
+        Map<String, String> hashParams = new TreeMap<>(vnpParams);
+        hashParams.remove("vnp_SecureHashType");
+        hashParams.remove("vnp_SecureHash");
+
+        // ===== 7. Build hashData (KHÔNG encode) =====
+        String hashData = VnPayUtil.buildHashData(hashParams);
+
+        // ===== 8. Ký HMAC SHA512 =====
+        String secureHash = VnPayUtil.hmacSHA512(hashSecret, hashData);
+
+        // ===== 9. Build query string (CÓ encode) =====
+        String queryString = VnPayUtil.buildQueryString(new TreeMap<>(vnpParams));
+
+        // ===== 10. URL cuối cùng =====
+        return payUrl + "?" + queryString + "&vnp_SecureHash=" + secureHash;
     }
+
+
 
     private boolean verifySignature(Map<String, String> params) {
 
@@ -171,39 +190,57 @@ public class PaymentServiceImpl implements PaymentService {
     public boolean handleVnpayIPN(Map<String, String> params) {
 
         if (!verifySignature(params)) {
-            return false; // Sai chữ ký, báo lỗi cho VNPay
+            return false;
         }
 
         String txnRef = params.get("vnp_TxnRef");
         String responseCode = params.get("vnp_ResponseCode");
         String transactionNo = params.get("vnp_TransactionNo");
-        long vnpAmount = Long.parseLong(params.getOrDefault("vnp_Amount", "0")) / 100; // VNPay nhân 100
 
         Payment payment = paymentRepository.findByVnpTxnRef(txnRef)
                 .orElse(null);
 
         if (payment == null) return false;
 
-        // 🚫 chống double payment
         if (payment.getStatus() == PaymentStatus.SUCCESS) {
             return true;
         }
 
         Order order = payment.getOrder();
 
-        // kiểm tra amount khớp
-        if (!order.getTotalAmount().equals(vnpAmount)) {
+        long amountFromVnpay = Long.parseLong(params.get("vnp_Amount"));
+        long orderAmount = order.getTotalAmount()
+                .multiply(BigDecimal.valueOf(100))
+                .longValue();
+
+        if (amountFromVnpay != orderAmount) {
             payment.setStatus(PaymentStatus.FAILED);
             paymentRepository.save(payment);
             return false;
         }
 
         if ("00".equals(responseCode)) {
+
+            // 🔥 TRỪ KHO NGAY KHI VNPAY SUCCESS
+            for (OrderItem item : order.getItems()) {
+                Drug drug = item.getDrug();
+
+                if (drug.getStockQuantity() < item.getQuantity()) {
+                    throw new RuntimeException("Thuốc hết hàng: " + drug.getName());
+                }
+
+                drug.setStockQuantity(
+                        drug.getStockQuantity() - item.getQuantity()
+                );
+                drugRepository.save(drug);
+            }
+
             payment.setStatus(PaymentStatus.SUCCESS);
             payment.setVnpTransactionNo(transactionNo);
             payment.setPaidAt(LocalDateTime.now());
 
             order.setStatus(OrderStatus.PAID);
+            order.setPaymentMethod(PaymentMethod.VNPAY);
 
             orderRepository.save(order);
             paymentRepository.save(payment);
@@ -215,6 +252,7 @@ public class PaymentServiceImpl implements PaymentService {
         paymentRepository.save(payment);
         return false;
     }
+
 
 
 }

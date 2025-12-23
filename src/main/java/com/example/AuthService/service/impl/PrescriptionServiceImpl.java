@@ -1,10 +1,7 @@
 package com.example.AuthService.service.impl;
 
 import com.example.AuthService.dto.request.*;
-import com.example.AuthService.dto.response.DrugSummaryResponse;
-import com.example.AuthService.dto.response.PrescriptionSummaryResponse;
-import com.example.AuthService.dto.response.ScheduleResponseDTO;
-import com.example.AuthService.dto.response.SingleDrugResponse;
+import com.example.AuthService.dto.response.*;
 import com.example.AuthService.entity.*;
 import com.example.AuthService.enums.FrequencyType;
 import com.example.AuthService.repository.*;
@@ -933,35 +930,52 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 drugInPrescriptionRepository
                         .findByUserAndPrescriptionIsNullAndStatus(user, status);
 
-        LocalDateTime now = LocalDateTime.now();
-
         return drugs.stream()
                 .map(dip -> {
+
                     String drugName = dip.getDrugName();
                     if (drugName == null || drugName.isBlank()) {
                         drugName = "Thuốc không tên";
                     }
 
-                    LocalDateTime nearest = dip.getSchedules() == null
-                            ? null
-                            : dip.getSchedules().stream()
-                            .map(Schedule::getDate)
-                            .filter(date -> !date.isBefore(now))
-                            .min(LocalDateTime::compareTo)
-                            .orElse(null);
+                    String unitName = dip.getUnit() != null
+                            ? dip.getUnit().getName()
+                            : null;
+
+                    // 🔥 LẤY GIỜ KHÔNG TRÙNG
+                    List<DrugScheduleResponse> schedules =
+                            dip.getSchedules() == null
+                                    ? List.of()
+                                    : dip.getSchedules().stream()
+                                    .collect(Collectors.toMap(
+                                            s -> s.getDate().toLocalTime(), // key = giờ
+                                            s -> new DrugScheduleResponse(
+                                                    s.getDate().toLocalTime(),
+                                                    s.getDosage(),
+                                                    unitName
+                                            ),
+                                            (existing, ignore) -> existing // trùng giờ → giữ 1
+                                    ))
+                                    .values()
+                                    .stream()
+                                    .sorted(Comparator.comparing(DrugScheduleResponse::getTime))
+                                    .toList();
 
                     return new SingleDrugResponse(
                             dip.getId(),
                             drugName,
-                            nearest
+                            dip.getNote(),
+                            dip.getFrequencyType(),
+                            dip.getIntervalDays(),
+                            dip.getDaysOfWeek(),
+                            schedules
                     );
                 })
-                .sorted(Comparator.comparing(
-                        SingleDrugResponse::getNearestTime,
-                        Comparator.nullsLast(Comparator.naturalOrder())
-                ))
                 .toList();
     }
+
+
+
 
     public DrugInPresRequest mapDrugInPrescriptionToRequest(DrugInPrescription dip) {
 

@@ -33,7 +33,7 @@ public class AdminOrderController {
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
 
         orderService.updateOrderStatus(orderId, status, user);
-        return ResponseEntity.ok("✅ Order cập nhật trạng thái: " + status);
+        return ResponseEntity.ok("Order cập nhật trạng thái: " + status);
     }
 
 }
