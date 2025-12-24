@@ -99,8 +99,10 @@ public class PaymentServiceImpl implements PaymentService {
         vnpParams.put("vnp_OrderInfo", "Thanh_toan_don_hang_" + order.getId());
         vnpParams.put("vnp_OrderType", "other");
         vnpParams.put("vnp_Locale", "vn");
-        vnpParams.put("vnp_ReturnUrl", returnUrl);
-        vnpParams.put("vnp_IpAddr", clientIp); // ⭐ BẮT BUỘC
+        vnpParams.put("vnp_ReturnUrl", "https://unfishable-increasing-columbus.ngrok-free.dev/api/payments/vnpay/return");
+//        vnpParams.put("vnp_IpAddr", clientIp);
+        vnpParams.put("vnp_IpAddr", "8.8.8.8");
+
         vnpParams.put("vnp_CreateDate",
                 DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(LocalDateTime.now()));
         vnpParams.put("vnp_ExpireDate",
@@ -165,10 +167,73 @@ public class PaymentServiceImpl implements PaymentService {
     public boolean handleVnpayReturn(Map<String, String> params) {
 
         if (!verifySignature(params)) {
-            throw new RuntimeException("Sai chữ ký VNPay");
+            return false;
         }
 
-        return "00".equals(params.get("vnp_ResponseCode"));
+        String txnRef = params.get("vnp_TxnRef");
+        String responseCode = params.get("vnp_ResponseCode");
+        String transactionNo = params.get("vnp_TransactionNo");
+
+        Payment payment = paymentRepository.findByVnpTxnRef(txnRef)
+                .orElse(null);
+
+        if (payment == null) return false;
+
+        Order order = payment.getOrder();
+
+        // ===== CHECK AMOUNT =====
+        long amountFromVnpay = Long.parseLong(params.get("vnp_Amount"));
+        long orderAmount = order.getTotalAmount()
+                .multiply(BigDecimal.valueOf(100))
+                .longValue();
+
+        if (amountFromVnpay != orderAmount) {
+            payment.setStatus(PaymentStatus.FAILED);
+            paymentRepository.save(payment);
+            return false;
+        }
+
+        // ===== CHỈ XỬ LÝ KHI SUCCESS =====
+        if ("00".equals(responseCode)) {
+
+            // 🔒 CHỐNG CALLBACK LẶP
+            if (payment.getStatus() == PaymentStatus.SUCCESS) {
+                return true;
+            }
+
+            // 🔥 TRỪ KHO
+            for (OrderItem item : order.getItems()) {
+                Drug drug = item.getDrug();
+
+                if (drug.getStockQuantity() < item.getQuantity()) {
+                    throw new RuntimeException("Thuốc hết hàng: " + drug.getName());
+                }
+
+                drug.setStockQuantity(
+                        drug.getStockQuantity() - item.getQuantity()
+                );
+                drugRepository.save(drug);
+            }
+
+            // ===== UPDATE PAYMENT =====
+            payment.setStatus(PaymentStatus.SUCCESS);
+            payment.setVnpTransactionNo(transactionNo);
+            payment.setPaidAt(LocalDateTime.now());
+
+            // ===== UPDATE ORDER =====
+            order.setStatus(OrderStatus.PAID);
+            order.setPaymentMethod(PaymentMethod.VNPAY);
+
+            orderRepository.save(order);
+            paymentRepository.save(payment);
+
+            return true;
+        }
+
+        // ===== FAILED =====
+        payment.setStatus(PaymentStatus.FAILED);
+        paymentRepository.save(payment);
+        return false;
     }
 
 
