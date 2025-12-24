@@ -99,7 +99,7 @@ public class PaymentServiceImpl implements PaymentService {
         vnpParams.put("vnp_OrderInfo", "Thanh_toan_don_hang_" + order.getId());
         vnpParams.put("vnp_OrderType", "other");
         vnpParams.put("vnp_Locale", "vn");
-        vnpParams.put("vnp_ReturnUrl", "https://unfishable-increasing-columbus.ngrok-free.dev/api/payments/vnpay/return");
+        vnpParams.put("vnp_ReturnUrl", returnUrl);
 //        vnpParams.put("vnp_IpAddr", clientIp);
         vnpParams.put("vnp_IpAddr", "8.8.8.8");
 
