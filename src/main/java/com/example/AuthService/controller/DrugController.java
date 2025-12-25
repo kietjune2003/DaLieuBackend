@@ -82,7 +82,7 @@ public class DrugController {
 
     // UPDATE — chỉ ADMIN
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN','MODERATOR')")
     public ResponseEntity<Drug> updateDrug(@PathVariable Long id, @RequestBody Drug drug) {
         return ResponseEntity.ok(drugService.updateDrug(id, drug));
     }

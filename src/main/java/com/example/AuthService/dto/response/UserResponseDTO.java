@@ -1,22 +1,25 @@
 package com.example.AuthService.dto.response;
 
-import lombok.*;
+import lombok.Builder;
+import lombok.Data;
+
 import java.time.LocalDate;
 
-@Getter
-@Setter
-@AllArgsConstructor
-@NoArgsConstructor
+@Data
 @Builder
-public class UserProfileResponse {
+public class UserResponseDTO {
+    private Long id;
     private String email;
+    private String password;
     private String name;
     private String gender;
     private LocalDate dateOfBirth;
     private String phoneNumber;
     private String photoUrl;
-    private String facebookAccountId;
-    private String googleAccountId;
     private String roleName;
     private String countryName;
+    private boolean accountNonExpired;
+    private boolean accountNonLocked;
+    private boolean credentialsNonExpired;
+    private boolean enabled;
 }

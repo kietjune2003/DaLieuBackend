@@ -157,6 +157,15 @@ public class OrderServiceImpl implements OrderService {
             case COMPLETED:
                 if (current == OrderStatus.SHIPPED) {
                     order.setStatus(OrderStatus.COMPLETED);
+                    for (OrderItem item : order.getItems()) {
+                        Drug drug = item.getDrug();
+
+
+                        drug.setSoldQuantity(
+                                drug.getSoldQuantity() - item.getQuantity()
+                        );
+                        drugRepository.save(drug);
+                    }
                 } else {
                     throw new RuntimeException("Chỉ đơn SHIPPED mới hoàn tất");
                 }

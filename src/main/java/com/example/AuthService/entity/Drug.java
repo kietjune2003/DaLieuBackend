@@ -30,7 +30,9 @@ public class Drug {
     private BigDecimal importPrice;
     @Column(nullable = false)
     private Integer stockQuantity;
-
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer soldQuantity = 0;
     @OneToMany(mappedBy = "drug", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonManagedReference
     private List<Section> sections = new ArrayList<>();

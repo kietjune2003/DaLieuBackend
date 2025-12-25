@@ -1,6 +1,8 @@
 package com.example.AuthService.repository;
 
 import com.example.AuthService.entity.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
@@ -16,7 +18,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     // (tiện) kiểm tra tồn tại email
     boolean existsByEmail(String email);
 
-    // (tuỳ chọn) dùng cho đăng nhập xã hội
+
     Optional<User> findByGoogleAccountId(String googleAccountId);
 
+    Page<User> findByNameContainingIgnoreCaseOrEmailContainingIgnoreCase(
+            String name, String email, Pageable pageable
+    );
 }
