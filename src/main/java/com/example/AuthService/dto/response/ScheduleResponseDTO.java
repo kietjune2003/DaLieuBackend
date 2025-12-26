@@ -7,7 +7,7 @@ import java.util.List;
 
 @Data
 public class ScheduleResponseDTO {
-
+    private Long id;
     private Long scheduleId;
     private String drugName;
     private double dosage;

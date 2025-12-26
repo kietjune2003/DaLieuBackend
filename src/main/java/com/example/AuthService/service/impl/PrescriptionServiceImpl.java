@@ -496,6 +496,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         ScheduleResponseDTO dto = new ScheduleResponseDTO();
 
         // ====== SCHEDULE ======
+        
         dto.setScheduleId(schedule.getId());
         dto.setDosage(schedule.getDosage());
         dto.setStatus(schedule.getStatus());
@@ -510,7 +511,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (dip == null) {
             return dto; // cực hiếm, nhưng phòng thủ
         }
-
+        dto.setId(dip.getId());
         dto.setDrugName(dip.getDrugName());
         dto.setNote(dip.getNote());
 
