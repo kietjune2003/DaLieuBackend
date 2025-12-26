@@ -3,6 +3,7 @@ package com.example.AuthService.service.impl;
 import com.example.AuthService.dto.DrugFilter;
 import com.example.AuthService.entity.Drug;
 import com.example.AuthService.repository.DrugRepository;
+import com.example.AuthService.service.CloudinaryService;
 import com.example.AuthService.service.DrugService;
 
 
@@ -11,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -18,23 +20,61 @@ import java.util.List;
 @RequiredArgsConstructor
 public class DrugServiceImpl implements DrugService {
     private final DrugRepository drugRepository;
-
+    private final CloudinaryService cloudinaryService;
     @Override
     public Drug createDrug(Drug drug) {
+        if (drug.getSections() != null) {
+            drug.getSections().forEach(section -> section.setDrug(drug));
+        }
+        return drugRepository.save(drug);
+    }
+    @Override
+    public Drug createDrugWithImage(Drug drug, MultipartFile image) {
+
+        // 1️⃣ Upload ảnh
+        String imageUrl = cloudinaryService.uploadImage(image);
+        drug.setImage(imageUrl);
+
+        // 2️⃣ Set quan hệ Section
+        if (drug.getSections() != null) {
+            drug.getSections().forEach(section -> section.setDrug(drug));
+        }
+
+        // 3️⃣ Save DB
         return drugRepository.save(drug);
     }
 
     @Override
-    public Drug updateDrug(Long id, Drug updated) {
+    public Drug updateDrugWithImage(Long id, Drug updated, MultipartFile image) {
+
         Drug drug = drugRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Drug not found"));
+
+        // 1️⃣ Nếu có ảnh mới → upload
+        if (image != null && !image.isEmpty()) {
+            String imageUrl = cloudinaryService.uploadImage(image);
+            drug.setImage(imageUrl);
+        }
+
+        // 2️⃣ Update field cơ bản
         drug.setName(updated.getName());
         drug.setTitle(updated.getTitle());
-        drug.setImage(updated.getImage());
         drug.setPrice(updated.getPrice());
+        drug.setImportPrice(updated.getImportPrice());
         drug.setStockQuantity(updated.getStockQuantity());
+
+        // 3️⃣ Update sections (nếu có)
+        if (updated.getSections() != null) {
+            drug.getSections().clear();
+            updated.getSections().forEach(section -> {
+                section.setDrug(drug);
+                drug.getSections().add(section);
+            });
+        }
+
         return drugRepository.save(drug);
     }
+
 
     @Override
     public void deleteDrug(Long id) {

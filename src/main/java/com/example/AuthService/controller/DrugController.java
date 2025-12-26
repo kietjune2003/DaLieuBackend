@@ -4,13 +4,16 @@ import com.example.AuthService.dto.DrugFilter; // giữ nguyên import theo file
 import com.example.AuthService.entity.Drug;
 import com.example.AuthService.service.DrugService;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -73,19 +76,30 @@ public class DrugController {
         return ResponseEntity.ok(drugService.getDrugById(id));
     }
 
-    // CREATE — chỉ ADMIN
-    @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Drug> createDrug(@RequestBody Drug drug) {
-        return ResponseEntity.ok(drugService.createDrug(drug));
+//    // CREATE — chỉ ADMIN
+//    @PostMapping
+//    @PreAuthorize("hasRole('ADMIN')")
+//    public ResponseEntity<Drug> createDrug(@RequestBody Drug drug) {
+//        return ResponseEntity.ok(drugService.createDrug(drug));
+//    }
+
+    // UPDATE — ADMIN / MODERATOR
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN','MODERATOR')")
+    public ResponseEntity<Drug> updateDrug(
+            @PathVariable Long id,
+            @RequestPart("drug") String drugJson,
+            @RequestPart(value = "image", required = false) MultipartFile image
+    ) throws Exception {
+
+        ObjectMapper mapper = new ObjectMapper();
+        Drug updatedDrug = mapper.readValue(drugJson, Drug.class);
+
+        return ResponseEntity.ok(
+                drugService.updateDrugWithImage(id, updatedDrug, image)
+        );
     }
 
-    // UPDATE — chỉ ADMIN
-    @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN','MODERATOR')")
-    public ResponseEntity<Drug> updateDrug(@PathVariable Long id, @RequestBody Drug drug) {
-        return ResponseEntity.ok(drugService.updateDrug(id, drug));
-    }
 
     // DELETE — chỉ ADMIN
     @DeleteMapping("/{id}")
@@ -94,4 +108,19 @@ public class DrugController {
         drugService.deleteDrug(id);
         return ResponseEntity.noContent().build();
     }
+    @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Drug> createDrugWithImage(
+            @RequestPart("drug") String drugJson,
+            @RequestPart("image") MultipartFile image
+    ) throws Exception {
+
+        ObjectMapper mapper = new ObjectMapper();
+        Drug drug = mapper.readValue(drugJson, Drug.class);
+
+        System.out.println(">>> CREATE DRUG HIT <<<");
+        return ResponseEntity.ok(drugService.createDrugWithImage(drug, image));
+    }
+
+
 }

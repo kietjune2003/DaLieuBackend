@@ -68,7 +68,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // chỉ mở các endpoint auth phát token/refresh
                         .requestMatchers("/api/auth/**","/api/payments/vnpay/return",
-                                "/api/payments/vnpay/ipn").permitAll()
+                                "/api/payments/vnpay/ipn","/api/drugs/**").permitAll()
 
                         .anyRequest().authenticated()
                 )
