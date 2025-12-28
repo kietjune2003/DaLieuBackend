@@ -21,6 +21,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 
+import java.nio.file.AccessDeniedException;
 import java.time.LocalDateTime;
 
 @RestController
@@ -123,5 +124,16 @@ public class OrderController {
         );
     }
 
+    @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> getOrderById(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails
+    ) throws AccessDeniedException {
+        User user = userRepository.findByEmail(userDetails.getUsername())
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy user"));
+
+        return ResponseEntity.ok(orderService.getOrderById(user, id));
+    }
 
 }

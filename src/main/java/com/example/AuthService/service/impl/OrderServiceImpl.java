@@ -20,6 +20,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.nio.file.AccessDeniedException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -334,11 +335,31 @@ public class OrderServiceImpl implements OrderService {
                                         .quantity(item.getQuantity())
                                         .unitPrice(item.getUnitPrice())
                                         .totalPrice(item.getTotalPrice())
+                                        .imgUrl(item.getDrug().getImage())
                                         .build())
                                 .toList()
                 )
                 .build();
     }
 
+    @Override
+    public OrderResponse getOrderById(User user, Long orderId) throws AccessDeniedException {
+
+        boolean isAdminOrMod =
+                user.getRole().getName().equalsIgnoreCase("ADMIN") ||
+                        user.getRole().getName().equalsIgnoreCase("MODERATOR");
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng"));
+
+        // 🔐 USER chỉ được xem đơn của chính mình
+        if (!isAdminOrMod) {
+            if (!order.getUser().getId().equals(user.getId())) {
+                throw new AccessDeniedException("Bạn không có quyền xem đơn hàng này");
+            }
+        }
+
+        return mapToResponse(order);
+    }
 
 }

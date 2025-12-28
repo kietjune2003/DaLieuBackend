@@ -15,5 +15,6 @@ public class OrderItemResponse {
     private Integer quantity;
     private Double unitPrice;
     private Double totalPrice;
+    private String imgUrl;
 }
 

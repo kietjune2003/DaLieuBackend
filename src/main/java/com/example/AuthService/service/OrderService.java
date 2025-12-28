@@ -11,6 +11,7 @@ import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Pageable;
 
 
+import java.nio.file.AccessDeniedException;
 import java.time.LocalDateTime;
 
 public interface OrderService {
@@ -31,4 +32,5 @@ public interface OrderService {
             Long userId,
             Pageable pageable
     );
+    OrderResponse getOrderById(User user, Long orderId) throws AccessDeniedException;
 }
