@@ -36,4 +36,5 @@ public class Drug {
     @OneToMany(mappedBy = "drug", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonManagedReference
     private List<Section> sections = new ArrayList<>();
+    private Boolean isActive = true;
 }

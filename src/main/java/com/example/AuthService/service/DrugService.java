@@ -15,7 +15,7 @@ public interface DrugService {
     Drug createDrugWithImage(Drug drug, MultipartFile image);
 
 
-
+    Drug updateDrugActive(Long id, boolean active);
 
     Drug updateDrugWithImage(Long id, Drug updated, MultipartFile image);
 
@@ -23,8 +23,8 @@ public interface DrugService {
     Drug getDrugById(Long id);
     List<Drug> getAllDrugs();
 
-    // Phân trang + lọc (CHÚ Ý: DrugFilter trước, Pageable sau)
-    Page<Drug> getDrugs(DrugFilter filter, Pageable pageable);
+    Page<Drug> getDrugs(DrugFilter filter, Pageable pageable, boolean isAdmin);
+
 
     // Gợi ý tên
     List<String> suggestNames(String q, int limit);

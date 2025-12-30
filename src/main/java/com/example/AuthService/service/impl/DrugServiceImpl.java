@@ -45,6 +45,16 @@ public class DrugServiceImpl implements DrugService {
     }
 
     @Override
+    public Drug updateDrugActive(Long id, boolean active) {
+        Drug drug = drugRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy thuốc với id = " + id));
+
+        drug.setIsActive(active);
+
+        return drugRepository.save(drug);
+    }
+
+    @Override
     public Drug updateDrugWithImage(Long id, Drug updated, MultipartFile image) {
 
         Drug drug = drugRepository.findById(id)
@@ -95,18 +105,26 @@ public class DrugServiceImpl implements DrugService {
         return drugRepository.findAll();
     }
 
-    // CHÚ Ý chữ ký phải TRÙNG interface
     @Override
-    public Page<Drug> getDrugs(DrugFilter filter, Pageable pageable) {
+    public Page<Drug> getDrugs(DrugFilter filter, Pageable pageable, boolean isAdmin) {
+
         Pageable effective = (pageable == null || pageable.getSort().isUnsorted())
-                ? PageRequest.of(pageable == null ? 0 : pageable.getPageNumber(),
+                ? PageRequest.of(
+                pageable == null ? 0 : pageable.getPageNumber(),
                 pageable == null ? 20 : pageable.getPageSize(),
-                Sort.by(Sort.Order.desc("id")))
+                Sort.by(Sort.Order.desc("id"))
+        )
                 : pageable;
+
+        // ⭐ BUSINESS RULE
+        if (!isAdmin) {
+            filter.setIsActive(true); // ép USER chỉ thấy thuốc active
+        }
 
         Specification<Drug> spec = DrugSpecifications.withFilter(filter);
         return drugRepository.findAll(spec, effective);
     }
+
 
     @Override
     public List<String> suggestNames(String q, int limit) {

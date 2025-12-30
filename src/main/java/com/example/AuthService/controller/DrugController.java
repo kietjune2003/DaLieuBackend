@@ -1,17 +1,20 @@
 package com.example.AuthService.controller;
 
 import com.example.AuthService.dto.DrugFilter; // giữ nguyên import theo file bạn đang dùng
+import com.example.AuthService.dto.request.UpdateDrugActiveRequest;
 import com.example.AuthService.entity.Drug;
 import com.example.AuthService.service.DrugService;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -37,7 +40,8 @@ public class DrugController {
             @RequestParam(required = false) BigDecimal maxPrice,
             @RequestParam(required = false) Boolean inStock,
             @RequestParam(required = false) Boolean hasImage,
-            @PageableDefault(size = 20, sort = "id") Pageable pageable
+            @PageableDefault(size = 20, sort = "id") Pageable pageable,
+            Authentication authentication
     ) {
         DrugFilter f = new DrugFilter();
         f.setQ(q);
@@ -45,8 +49,18 @@ public class DrugController {
         f.setMaxPrice(maxPrice);
         f.setInStock(inStock);
         f.setHasImage(hasImage);
-        return ResponseEntity.ok(drugService.getDrugs(f, pageable));
+
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(a ->
+                        a.getAuthority().equals("ROLE_ADMIN") ||
+                                a.getAuthority().equals("ROLE_MODERATOR")
+                );
+
+        return ResponseEntity.ok(
+                drugService.getDrugs(f, pageable, isAdmin)
+        );
     }
+
 
     /**
      * Gợi ý autocomplete cho ô search
@@ -100,7 +114,16 @@ public class DrugController {
         );
     }
 
-
+    // UPDATE ACTIVE — ADMIN
+    @PutMapping("/{id}/active")
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    public ResponseEntity<Drug> updateDrugActive(
+            @PathVariable Long id,
+            @RequestBody UpdateDrugActiveRequest request
+    ) {
+        Drug updatedDrug = drugService.updateDrugActive(id, request.isActive());
+        return ResponseEntity.ok(updatedDrug);
+    }
     // DELETE — chỉ ADMIN
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")

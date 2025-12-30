@@ -16,19 +16,20 @@ public class DrugSpecifications {
             List<Predicate> ps = new ArrayList<>();
 
             if (f != null) {
+
                 if (StringUtils.hasText(f.getQ())) {
                     String like = "%" + f.getQ().toLowerCase().trim() + "%";
-                    ps.add(cb.or(
-                            cb.like(cb.lower(root.get("name")), like)
-
-                    ));
+                    ps.add(cb.like(cb.lower(root.get("name")), like));
                 }
+
                 if (f.getMinPrice() != null) {
                     ps.add(cb.greaterThanOrEqualTo(root.get("price"), f.getMinPrice()));
                 }
+
                 if (f.getMaxPrice() != null) {
                     ps.add(cb.lessThanOrEqualTo(root.get("price"), f.getMaxPrice()));
                 }
+
                 if (f.getInStock() != null) {
                     if (f.getInStock()) {
                         ps.add(cb.greaterThan(root.get("stockQuantity"), 0));
@@ -36,6 +37,7 @@ public class DrugSpecifications {
                         ps.add(cb.equal(root.get("stockQuantity"), 0));
                     }
                 }
+
                 if (f.getHasImage() != null) {
                     if (f.getHasImage()) {
                         ps.add(cb.and(
@@ -49,9 +51,15 @@ public class DrugSpecifications {
                         ));
                     }
                 }
+
+                // ⭐ THÊM DÒNG NÀY
+                if (f.getIsActive() != null) {
+                    ps.add(cb.equal(root.get("isActive"), f.getIsActive()));
+                }
             }
 
             return cb.and(ps.toArray(new Predicate[0]));
         };
     }
 }
+

@@ -9,5 +9,6 @@ public class DrugFilter {
     private BigDecimal minPrice;  // giá tối thiểu
     private BigDecimal maxPrice;  // giá tối đa
     private Boolean inStock;      // true => stockQuantity > 0; false => == 0
-    private Boolean hasImage;     // true => image not null && not blank
+    private Boolean hasImage;
+    private Boolean isActive;// true => image not null && not blank
 }
