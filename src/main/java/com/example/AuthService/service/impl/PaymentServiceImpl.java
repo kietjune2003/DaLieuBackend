@@ -1,4 +1,5 @@
 package com.example.AuthService.service.impl;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import com.example.AuthService.entity.*;
 import com.example.AuthService.enums.OrderStatus;
@@ -13,18 +14,24 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.TreeMap;
-import java.util.UUID;
+import java.util.*;
 
+import lombok.extern.slf4j.Slf4j;
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -38,10 +45,11 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Value("${vnpay.payUrl}")
     private String payUrl;
-
+    private final RestTemplate restTemplate = new RestTemplate();
     @Value("${vnpay.returnUrl}")
     private String returnUrl;
-
+    @Value("${vnpay.refundUrl}")
+    private String refundUrl;
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
     private final DrugRepository drugRepository;
@@ -311,6 +319,87 @@ public class PaymentServiceImpl implements PaymentService {
         return false;
     }
 
+    @Override
+    public boolean callVnPayRefund(Payment payment, User admin) {
+
+        try {
+            String requestId = UUID.randomUUID().toString().replace("-", "");
+            String createDate = LocalDateTime.now()
+                    .format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+
+            String transactionDate = payment.getPaidAt()
+                    .format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+
+            long amount = payment.getAmount()
+                    .multiply(BigDecimal.valueOf(100))
+                    .longValue();
+
+            // ===== 1. BUILD HASH DATA (THEO THỨ TỰ CỨNG) =====
+            String hashData = String.join("|",
+                    requestId,
+                    "2.1.0",
+                    "refund",
+                    tmnCode,
+                    "02",
+                    payment.getVnpTxnRef(),
+                    String.valueOf(amount),
+                    payment.getVnpTransactionNo(),
+                    transactionDate,
+                    admin.getEmail(),
+                    createDate,
+                    "127.0.0.1",
+                    "Hoan tien don hang " + payment.getOrder().getId()
+            );
+
+            String secureHash = VnPayUtil.hmacSHA512(hashSecret, hashData);
+
+            log.info("VNPay REFUND hashData = {}", hashData);
+            log.info("VNPay REFUND secureHash = {}", secureHash);
+
+            // ===== 2. JSON BODY =====
+            Map<String, String> body = new HashMap<>();
+            body.put("vnp_RequestId", requestId);
+            body.put("vnp_Version", "2.1.0");
+            body.put("vnp_Command", "refund");
+            body.put("vnp_TmnCode", tmnCode);
+            body.put("vnp_TransactionType", "02");
+            body.put("vnp_TxnRef", payment.getVnpTxnRef());
+            body.put("vnp_Amount", String.valueOf(amount));
+            body.put("vnp_OrderInfo", "Hoan tien don hang " + payment.getOrder().getId());
+            body.put("vnp_TransactionNo", payment.getVnpTransactionNo());
+            body.put("vnp_TransactionDate", transactionDate);
+            body.put("vnp_CreateBy", admin.getEmail());
+            body.put("vnp_CreateDate", createDate);
+            body.put("vnp_IpAddr", "127.0.0.1");
+            body.put("vnp_SecureHash", secureHash);
+
+            // ===== 3. HEADER =====
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            HttpEntity<Map<String, String>> request =
+                    new HttpEntity<>(body, headers);
+
+            // ===== 4. CALL VNPay =====
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    refundUrl,
+                    request,
+                    Map.class
+            );
+
+            Map<String, Object> res = response.getBody();
+            if (res != null) {
+                res.forEach((k, v) -> log.info("{} = {}", k, v));
+                return "00".equals(res.get("vnp_ResponseCode"));
+            }
+
+            return false;
+
+        } catch (Exception e) {
+            log.error("VNPay refund exception", e);
+            return false;
+        }
+    }
 
 
 

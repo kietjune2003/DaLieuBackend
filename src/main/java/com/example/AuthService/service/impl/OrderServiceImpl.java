@@ -8,10 +8,12 @@ import com.example.AuthService.dto.response.PageResponse;
 import com.example.AuthService.entity.*;
 import com.example.AuthService.enums.OrderStatus;
 import com.example.AuthService.enums.PaymentMethod;
+import com.example.AuthService.enums.PaymentStatus;
 import com.example.AuthService.repository.DrugRepository;
 import com.example.AuthService.repository.OrderRepository;
 import com.example.AuthService.repository.PaymentRepository;
 import com.example.AuthService.service.OrderService;
+import com.example.AuthService.service.PaymentService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -33,6 +35,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
     private final DrugRepository drugRepository;
     private final PaymentRepository paymentRepository;
+    private final PaymentService paymentService;
     @Override
     public Order createOrder(CreateOrderRequest request, User user) {
 
@@ -186,48 +189,39 @@ public class OrderServiceImpl implements OrderService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy order"));
 
-        OrderStatus currentStatus = order.getStatus();
-        PaymentMethod method = order.getPaymentMethod();
-
-        boolean isAdminOrMod =
-                user.getRole().getName().equalsIgnoreCase("ADMIN") ||
-                        user.getRole().getName().equalsIgnoreCase("MODERATOR");
-
-        boolean isOwner = order.getUser().getId().equals(user.getId());
-
-        if (currentStatus == OrderStatus.COMPLETED) {
-            throw new RuntimeException("Đơn đã hoàn thành, không thể huỷ");
+        if (!order.getUser().getId().equals(user.getId())) {
+            throw new RuntimeException("Không có quyền huỷ đơn này");
         }
 
-        // USER
-        if (!isAdminOrMod) {
-            if (!isOwner) {
-                throw new RuntimeException("Không có quyền huỷ đơn này");
-            }
-            if (currentStatus != OrderStatus.PENDING) {
-                throw new RuntimeException("Người dùng chỉ được huỷ đơn khi PENDING");
-            }
+        OrderStatus status = order.getStatus();
+
+        // 1️⃣ CHƯA THANH TOÁN → HUỶ LUÔN
+        if (status == OrderStatus.PENDING) {
+            order.setStatus(OrderStatus.CANCELLED);
+            orderRepository.save(order);
+            return;
         }
 
-        // 🔁 HOÀN KHO KHI ĐƠN ĐÃ TỪNG TRỪ KHO
-        boolean needRestoreStock =
-                (currentStatus == OrderStatus.SHIPPED && method == PaymentMethod.COD) ||
-                        (currentStatus == OrderStatus.PAID && method == PaymentMethod.VNPAY) ||
-                        (currentStatus == OrderStatus.SHIPPED && method == PaymentMethod.VNPAY);
+        // 2️⃣ ĐÃ THANH TOÁN → GỬI YÊU CẦU HOÀN
+        if (status == OrderStatus.PAID
+                && order.getPaymentMethod() == PaymentMethod.VNPAY) {
 
-        if (isAdminOrMod && needRestoreStock) {
-            for (OrderItem item : order.getItems()) {
-                Drug drug = item.getDrug();
-                drug.setStockQuantity(
-                        drug.getStockQuantity() + item.getQuantity()
-                );
-                drugRepository.save(drug);
-            }
+            order.setStatus(OrderStatus.CANCEL_REQUESTED);
+
+            Payment payment = paymentRepository.findByOrder(order)
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy payment"));
+
+            payment.setStatus(PaymentStatus.REFUND_PENDING);
+
+            orderRepository.save(order);
+            paymentRepository.save(payment);
+            return;
         }
 
-        order.setStatus(OrderStatus.CANCELLED);
-        orderRepository.save(order);
+        throw new RuntimeException("Không thể huỷ đơn ở trạng thái hiện tại");
     }
+
+
 
 
     @Override
@@ -360,6 +354,71 @@ public class OrderServiceImpl implements OrderService {
         }
 
         return mapToResponse(order);
+    }
+
+    @Transactional
+    @Override
+    public void approveRefund(Long orderId, User admin) {
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy order"));
+
+        if (order.getStatus() != OrderStatus.CANCEL_REQUESTED) {
+            throw new RuntimeException("Order không ở trạng thái yêu cầu hoàn");
+        }
+
+        Payment payment = paymentRepository.findByOrder(order)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy payment"));
+
+        if (payment.getStatus() != PaymentStatus.REFUND_PENDING) {
+            throw new RuntimeException("Payment không hợp lệ");
+        }
+
+        // 1️⃣ GỌI VNPay REFUND
+        boolean refundSuccess = paymentService.callVnPayRefund(payment, admin);
+
+        if (!refundSuccess) {
+            payment.setStatus(PaymentStatus.REFUND_FAILED);
+            paymentRepository.save(payment);
+            throw new RuntimeException("Hoàn tiền thất bại");
+        }
+
+        // 2️⃣ HOÀN KHO
+        for (OrderItem item : order.getItems()) {
+            Drug drug = item.getDrug();
+            drug.setStockQuantity(
+                    drug.getStockQuantity() + item.getQuantity()
+            );
+            drugRepository.save(drug);
+        }
+
+        // 3️⃣ UPDATE STATUS
+        payment.setStatus(PaymentStatus.REFUNDED);
+        order.setStatus(OrderStatus.REFUNDED);
+
+        paymentRepository.save(payment);
+        orderRepository.save(order);
+    }
+
+    @Transactional
+    @Override
+    public void rejectRefund(Long orderId, User admin) {
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy order"));
+
+        if (order.getStatus() != OrderStatus.CANCEL_REQUESTED) {
+            throw new RuntimeException("Order không ở trạng thái yêu cầu hoàn");
+        }
+
+        Payment payment = paymentRepository.findByOrder(order)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy payment"));
+
+        order.setStatus(OrderStatus.PAID);
+        payment.setStatus(PaymentStatus.SUCCESS);
+
+        orderRepository.save(order);
+        paymentRepository.save(payment);
     }
 
 }

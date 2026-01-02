@@ -33,4 +33,10 @@ public interface OrderService {
             Pageable pageable
     );
     OrderResponse getOrderById(User user, Long orderId) throws AccessDeniedException;
+
+    @Transactional
+    void approveRefund(Long orderId, User admin);
+
+    @Transactional
+    void rejectRefund(Long orderId, User admin);
 }

@@ -35,5 +35,23 @@ public class AdminOrderController {
         orderService.updateOrderStatus(orderId, status, user);
         return ResponseEntity.ok("Order cập nhật trạng thái: " + status);
     }
+    @PutMapping("/{orderId}/approve-refund")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> approveRefund(
+            @PathVariable Long orderId,
+            @RequestParam boolean approve,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        User admin = userRepository.findByEmail(userDetails.getUsername())
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy admin"));
+
+        if (approve) {
+            orderService.approveRefund(orderId, admin);
+            return ResponseEntity.ok("Đã duyệt hoàn tiền");
+        } else {
+            orderService.rejectRefund(orderId, admin);
+            return ResponseEntity.ok("Đã từ chối hoàn tiền");
+        }
+    }
 
 }

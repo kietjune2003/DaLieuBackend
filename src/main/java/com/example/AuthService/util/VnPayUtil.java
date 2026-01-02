@@ -45,4 +45,26 @@ public class VnPayUtil {
             throw new RuntimeException("Cannot generate HmacSHA512", e);
         }
     }
+    public static String buildRefundHashData(Map<String, String> params) {
+
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+
+        for (Map.Entry<String, String> entry : params.entrySet()) {
+            if (entry.getValue() == null || entry.getValue().isEmpty()) continue;
+
+            if (!first) {
+                sb.append("&");
+            }
+            first = false;
+
+            // ❗ REFUND: KHÔNG URL ENCODE
+            sb.append(entry.getKey())
+                    .append("=")
+                    .append(entry.getValue());
+        }
+
+        return sb.toString();
+    }
+
 }

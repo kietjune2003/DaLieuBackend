@@ -11,4 +11,6 @@ public interface PaymentService {
     String createVnPayPayment(Long orderId, User user, HttpServletRequest request);
     boolean handleVnpayReturn(Map<String, String> params);
     boolean handleVnpayIPN(Map<String, String> params);
+
+    boolean callVnPayRefund(Payment payment, User admin);
 }
