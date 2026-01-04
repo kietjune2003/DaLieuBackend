@@ -98,5 +98,6 @@ public class User extends BaseEntity implements UserDetails {
         this.email = email;
         this.name = name;
         this.photoUrl = photoUrl;
+        this.enabled = true;
     }
 }

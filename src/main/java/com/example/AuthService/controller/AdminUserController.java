@@ -24,10 +24,15 @@ public class AdminUserController {
     public ResponseEntity<?> getAllUsers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) String keyword
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long roleId,
+            @RequestParam(required = false) Boolean enabled
     ) {
-        return ResponseEntity.ok(userService.getAllUsers(page, size, keyword));
+        return ResponseEntity.ok(
+                userService.getAllUsers(page, size, keyword, roleId, enabled)
+        );
     }
+
 
     @GetMapping("/{id}")
     public ResponseEntity<?> getUserById(@PathVariable Long id) {

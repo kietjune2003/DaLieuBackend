@@ -2,9 +2,7 @@ package com.example.AuthService.service.impl;
 
 import com.example.AuthService.dto.request.CreateOrderRequest;
 import com.example.AuthService.dto.request.OrderItemRequest;
-import com.example.AuthService.dto.response.OrderItemResponse;
-import com.example.AuthService.dto.response.OrderResponse;
-import com.example.AuthService.dto.response.PageResponse;
+import com.example.AuthService.dto.response.*;
 import com.example.AuthService.entity.*;
 import com.example.AuthService.enums.OrderStatus;
 import com.example.AuthService.enums.PaymentMethod;
@@ -14,18 +12,24 @@ import com.example.AuthService.repository.OrderRepository;
 import com.example.AuthService.repository.PaymentRepository;
 import com.example.AuthService.service.OrderService;
 import com.example.AuthService.service.PaymentService;
+import com.example.AuthService.spec.OrderSpecification;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.nio.file.AccessDeniedException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -420,5 +424,303 @@ public class OrderServiceImpl implements OrderService {
         orderRepository.save(order);
         paymentRepository.save(payment);
     }
+
+    @Override
+    public Page<OrderResponse> getOrdersForAdmin(
+            OrderStatus status,
+            PaymentMethod paymentMethod,
+            Long userId,
+            String keyword,
+            LocalDate fromDate,
+            LocalDate toDate,
+            String sortBy,
+            String sortDir,
+            int page,
+            int size
+    ) {
+
+        // ===== ALLOWED SORT FIELDS =====
+        Set<String> allowedSortFields = Set.of(
+                "id",
+                "createdAt",
+                "totalAmount",
+                "status"
+        );
+
+        String sortField = (sortBy == null || sortBy.isBlank())
+                ? "createdAt"
+                : sortBy;
+
+        if (!allowedSortFields.contains(sortField)) {
+            sortField = "createdAt";
+        }
+
+        Sort.Direction direction = "asc".equalsIgnoreCase(sortDir)
+                ? Sort.Direction.ASC
+                : Sort.Direction.DESC;
+
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(direction, sortField)
+        );
+
+        LocalDateTime fromDateTime = fromDate != null
+                ? fromDate.atStartOfDay()
+                : null;
+
+        LocalDateTime toDateTime = toDate != null
+                ? toDate.atTime(LocalTime.MAX)
+                : null;
+
+        Specification<Order> spec = OrderSpecification.filter(
+                status,
+                paymentMethod,
+                userId,
+                keyword,
+                fromDateTime,
+                toDateTime
+        );
+
+        return orderRepository
+                .findAll(spec, pageable)
+                .map(this::mapToResponse);
+    }
+
+
+    @Override
+    public OrderResponse getOrderDetailForAdmin(Long orderId) {
+
+        Order order = orderRepository.findDetailById(orderId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng"));
+
+        return mapToResponse(order);
+    }
+
+    @Transactional
+    @Override
+    public BulkOrderActionResult bulkShipOrders(List<Long> orderIds) {
+
+        List<Long> successIds = new ArrayList<>();
+        List<BulkOrderError> errors = new ArrayList<>();
+
+        for (Long orderId : orderIds) {
+            try {
+                Order order = orderRepository.findById(orderId)
+                        .orElseThrow(() -> new RuntimeException("Không tồn tại"));
+
+                if (order.getStatus() != OrderStatus.PENDING &&
+                        order.getStatus() != OrderStatus.PAID) {
+                    throw new RuntimeException("Không thể ship ở trạng thái " + order.getStatus());
+                }
+
+                order.setStatus(OrderStatus.SHIPPED);
+                successIds.add(orderId);
+
+            } catch (Exception e) {
+                errors.add(BulkOrderError.builder()
+                        .orderId(orderId)
+                        .reason(e.getMessage())
+                        .build());
+            }
+        }
+
+        return BulkOrderActionResult.builder()
+                .total(orderIds.size())
+                .success(successIds.size())
+                .failed(errors.size())
+                .successIds(successIds)
+                .errors(errors)
+                .build();
+    }
+
+    @Transactional
+    @Override
+    public BulkOrderActionResult bulkCompleteOrders(List<Long> orderIds) {
+
+        List<Long> successIds = new ArrayList<>();
+        List<BulkOrderError> errors = new ArrayList<>();
+
+        for (Long orderId : orderIds) {
+            try {
+                Order order = orderRepository.findById(orderId)
+                        .orElseThrow(() -> new RuntimeException("Không tồn tại"));
+
+                if (order.getStatus() != OrderStatus.SHIPPED) {
+                    throw new RuntimeException("Chưa được ship");
+                }
+
+                order.setStatus(OrderStatus.COMPLETED);
+                successIds.add(orderId);
+
+            } catch (Exception e) {
+                errors.add(BulkOrderError.builder()
+                        .orderId(orderId)
+                        .reason(e.getMessage())
+                        .build());
+            }
+        }
+
+        return BulkOrderActionResult.builder()
+                .total(orderIds.size())
+                .success(successIds.size())
+                .failed(errors.size())
+                .successIds(successIds)
+                .errors(errors)
+                .build();
+    }
+    @Transactional
+    public void refundPaidOrder(Order order, User admin) {
+
+        Payment payment = paymentRepository.findByOrder(order)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy payment"));
+
+        if (payment.getStatus() != PaymentStatus.SUCCESS) {
+            throw new RuntimeException("Payment không ở trạng thái có thể hoàn");
+        }
+
+        // 1️⃣ GỌI VNPay REFUND (có admin để audit)
+        boolean refundSuccess =
+                paymentService.callVnPayRefund(payment, admin);
+
+        if (!refundSuccess) {
+            payment.setStatus(PaymentStatus.REFUND_FAILED);
+            paymentRepository.save(payment);
+            throw new RuntimeException("Hoàn tiền thất bại");
+        }
+
+        // 2️⃣ HOÀN KHO
+        for (OrderItem item : order.getItems()) {
+            Drug drug = item.getDrug();
+            drug.setStockQuantity(
+                    drug.getStockQuantity() + item.getQuantity()
+            );
+            drugRepository.save(drug);
+        }
+
+        // 3️⃣ UPDATE PAYMENT
+        payment.setStatus(PaymentStatus.REFUNDED);
+        paymentRepository.save(payment);
+    }
+
+
+    @Override
+    @Transactional
+    public BulkOrderActionResult bulkCancelOrders(
+            List<Long> orderIds,
+            User admin
+    ) {
+
+        List<Long> successIds = new ArrayList<>();
+        List<BulkOrderError> errors = new ArrayList<>();
+
+        for (Long orderId : orderIds) {
+            try {
+                Order order = orderRepository.findById(orderId)
+                        .orElseThrow(() -> new RuntimeException("Không tồn tại order"));
+
+                // ===== CASE 1: PENDING → CANCELLED =====
+                if (order.getStatus() == OrderStatus.PENDING) {
+                    order.setStatus(OrderStatus.CANCELLED);
+                    orderRepository.save(order);
+                    successIds.add(orderId);
+                    continue;
+                }
+
+                // ===== CASE 2: PAID → REFUND + HOÀN KHO =====
+                if (order.getStatus() == OrderStatus.PAID || (order.getStatus() == OrderStatus.SHIPPED && order.getPaymentMethod() == PaymentMethod.VNPAY)) {
+
+                    refundPaidOrder(order, admin); //  truyền admin
+
+                    order.setStatus(OrderStatus.REFUNDED);
+                    orderRepository.save(order);
+
+                    successIds.add(orderId);
+                    continue;
+                }
+
+                // ===== CASE KHÔNG HỢP LỆ =====
+                throw new RuntimeException(
+                        "Không thể huỷ đơn ở trạng thái " + order.getStatus()
+                );
+
+            } catch (Exception e) {
+                errors.add(BulkOrderError.builder()
+                        .orderId(orderId)
+                        .reason(e.getMessage())
+                        .build());
+            }
+        }
+
+        return BulkOrderActionResult.builder()
+                .total(orderIds.size())
+                .success(successIds.size())
+                .failed(errors.size())
+                .successIds(successIds)
+                .errors(errors)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public BulkOrderActionResult bulkApproveRefund(
+            List<Long> orderIds,
+            User admin
+    ) {
+
+        List<Long> successIds = new ArrayList<>();
+        List<BulkOrderError> errors = new ArrayList<>();
+
+        for (Long orderId : orderIds) {
+            try {
+                approveRefund(orderId, admin); // 👈 dùng lại hàm có sẵn
+                successIds.add(orderId);
+            } catch (Exception e) {
+                errors.add(BulkOrderError.builder()
+                        .orderId(orderId)
+                        .reason(e.getMessage())
+                        .build());
+            }
+        }
+
+        return BulkOrderActionResult.builder()
+                .total(orderIds.size())
+                .success(successIds.size())
+                .failed(errors.size())
+                .successIds(successIds)
+                .errors(errors)
+                .build();
+    }
+    @Override
+    @Transactional
+    public BulkOrderActionResult bulkRejectRefund(
+            List<Long> orderIds,
+            User admin
+    ) {
+
+        List<Long> successIds = new ArrayList<>();
+        List<BulkOrderError> errors = new ArrayList<>();
+
+        for (Long orderId : orderIds) {
+            try {
+                rejectRefund(orderId, admin); // 👈 hàm bạn đã có
+                successIds.add(orderId);
+            } catch (Exception e) {
+                errors.add(BulkOrderError.builder()
+                        .orderId(orderId)
+                        .reason(e.getMessage())
+                        .build());
+            }
+        }
+
+        return BulkOrderActionResult.builder()
+                .total(orderIds.size())
+                .success(successIds.size())
+                .failed(errors.size())
+                .successIds(successIds)
+                .errors(errors)
+                .build();
+    }
+
 
 }

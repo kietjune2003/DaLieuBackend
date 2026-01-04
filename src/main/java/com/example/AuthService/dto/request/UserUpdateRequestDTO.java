@@ -2,6 +2,8 @@ package com.example.AuthService.dto.request;
 
 import lombok.Data;
 
+import java.time.LocalDate;
+
 @Data
 public class UserUpdateRequestDTO {
     private String name;
@@ -13,5 +15,6 @@ public class UserUpdateRequestDTO {
     private Long roleId;
     private Long countryId;
     private Boolean accountNonLocked;
+    private LocalDate dateOfBirth;
     private Boolean enabled;
 }

@@ -10,10 +10,12 @@ import com.example.AuthService.repository.CountryRepository;
 import com.example.AuthService.repository.RoleRepository;
 import com.example.AuthService.repository.UserRepository;
 import com.example.AuthService.service.UserService;
+import com.example.AuthService.spec.UserSpecification;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -46,17 +48,28 @@ public class UserServiceImpl implements UserService {
                 .build();
     }
     @Override
-    public List<UserResponseDTO> getAllUsers(int page, int size, String keyword) {
+    public List<UserResponseDTO> getAllUsers(
+            int page,
+            int size,
+            String keyword,
+            Long roleId,
+            Boolean enabled
+    ) {
         Pageable pageable = PageRequest.of(page, size);
-        Page<User> users;
-        if (keyword != null && !keyword.isBlank()) {
-            users = userRepository.findByNameContainingIgnoreCaseOrEmailContainingIgnoreCase(keyword, keyword, pageable);
-        } else {
-            users = userRepository.findAll(pageable);
-        }
 
-        return users.stream().map(this::toDTO).toList();
+        Specification<User> spec = UserSpecification.filter(
+                keyword,
+                roleId,
+                enabled
+        );
+
+        Page<User> users = userRepository.findAll(spec, pageable);
+
+        return users.stream()
+                .map(this::toDTO)
+                .toList();
     }
+
 
     @Override
     public UserResponseDTO getUserById(Long id) {
@@ -71,7 +84,11 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        if (request.getEmail() != null) {
+        if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
+            boolean exists = userRepository.existsByEmail(request.getEmail());
+            if (exists) {
+                throw new RuntimeException("Email already exists");
+            }
             user.setEmail(request.getEmail());
         }
 
@@ -114,6 +131,9 @@ public class UserServiceImpl implements UserService {
 
         if (request.getEnabled() != null) {
             user.setEnabled(request.getEnabled());
+        }
+        if (request.getDateOfBirth() != null) {
+            user.setDateOfBirth(request.getDateOfBirth());
         }
 
         userRepository.save(user);
@@ -189,5 +209,42 @@ public class UserServiceImpl implements UserService {
                 .enabled(user.isEnabled())
                 .build();
     }
+    private UserProfileResponse toProfileDTO(User user) {
+        return UserProfileResponse.builder()
+                .email(user.getEmail())
+                .name(user.getName())
+                .gender(user.getGender())
+                .dateOfBirth(user.getDateOfBirth())
+                .phoneNumber(user.getPhoneNumber())
+                .photoUrl(user.getPhotoUrl())
+                .facebookAccountId(user.getFacebookAccountId())
+                .googleAccountId(user.getGoogleAccountId())
+                .roleName(user.getRole() != null ? user.getRole().getName() : null)
+                .countryName(user.getCountry() != null ? user.getCountry().getName() : null)
+                .build();
+    }
+
+    @Override
+    public UserProfileResponse updateMyProfile(String email, UserUpdateRequestDTO request) {
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        user.setName(request.getName());
+        user.setGender(request.getGender());
+        user.setDateOfBirth(request.getDateOfBirth()); // ✅ THÊM
+        user.setPhoneNumber(request.getPhoneNumber());
+        user.setPhotoUrl(request.getPhotoUrl());
+
+
+        // user CHỈ đổi password CỦA MÌNH
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
+        }
+
+        userRepository.save(user);
+        return toProfileDTO(user);
+    }
+
 }
 

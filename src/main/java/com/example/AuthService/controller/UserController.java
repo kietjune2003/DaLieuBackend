@@ -1,5 +1,6 @@
 package com.example.AuthService.controller;
 
+import com.example.AuthService.dto.request.UserUpdateRequestDTO;
 import com.example.AuthService.dto.response.UserProfileResponse;
 import com.example.AuthService.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -21,5 +22,14 @@ public class UserController {
         String email = userDetails.getUsername();
         return userService.getUserProfileByEmail(email);
     }
+    @PutMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    public UserProfileResponse updateMyProfile(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody UserUpdateRequestDTO request
+    ) {
+        return userService.updateMyProfile(userDetails.getUsername(), request);
+    }
+
 
 }
