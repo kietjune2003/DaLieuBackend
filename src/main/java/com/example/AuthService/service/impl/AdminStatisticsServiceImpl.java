@@ -35,13 +35,79 @@ public class AdminStatisticsServiceImpl implements AdminStatisticsService {
 
     /* ========================= PUBLIC ========================= */
 
+//    @Override
+//    public RevenueSummaryDto getRevenueSummary(RevenueStatsFilter f) {
+//        LocalDateTime from = requireFrom(f.getFrom());
+//        LocalDateTime to = requireTo(f.getTo());
+//
+//        // ===== Revenue =====
+//        BigDecimal vnpayGross = sumPaymentAmountByPaidAt(PaymentStatus.SUCCESS, PaymentMethod.VNPAY, from, to);
+//        BigDecimal refundAmount =
+//                sumPaymentAmountByRefundedAt(PaymentStatus.REFUNDED, PaymentMethod.VNPAY, from, to);
+//
+//        BigDecimal codRevenue = BigDecimal.ZERO;
+//        if (f.getMode() == StatsMode.SALES_ALL) {
+//            codRevenue = sumCodCompletedOrders(from, to);
+//        }
+//
+//        BigDecimal grossRevenue = (f.getMode() == StatsMode.CASHFLOW_VNPAY_ONLY)
+//                ? vnpayGross
+//                : vnpayGross.add(codRevenue);
+//
+//        BigDecimal netRevenue = grossRevenue.subtract(refundAmount);
+//
+//        // ===== Orders count (để AOV) =====
+//        long vnpayOrders = countDistinctOrdersFromPayments(PaymentStatus.SUCCESS, PaymentMethod.VNPAY, from, to);
+//        long codOrders = (f.getMode() == StatsMode.SALES_ALL) ? countCodCompletedOrders(from, to) : 0;
+//        long ordersCount = (f.getMode() == StatsMode.CASHFLOW_VNPAY_ONLY) ? vnpayOrders : (vnpayOrders + codOrders);
+//
+//        BigDecimal aov = (ordersCount > 0)
+//                ? netRevenue.divide(BigDecimal.valueOf(ordersCount), 2, RoundingMode.HALF_UP)
+//                : BigDecimal.ZERO;
+//
+//        // ===== COGS (tiền vốn) =====
+//        BigDecimal vnpayCogs = sumVnpayCogsSuccess(from, to);
+//        BigDecimal codCogs = (f.getMode() == StatsMode.SALES_ALL) ? sumCodCogsCompleted(from, to) : BigDecimal.ZERO;
+//
+//        BigDecimal grossCogs = (f.getMode() == StatsMode.CASHFLOW_VNPAY_ONLY)
+//                ? vnpayCogs
+//                : vnpayCogs.add(codCogs);
+//
+//        // refundedCogs hiện tính "approx" theo Payment.createdAt (vì chưa có refundedAt)
+//        BigDecimal refundedCogs = sumVnpayCogsRefunded(from, to);
+//        BigDecimal netCogs = grossCogs.subtract(refundedCogs);
+//
+//        // ===== Profit =====
+//        BigDecimal grossProfit = grossRevenue.subtract(grossCogs);
+//        BigDecimal netProfit = netRevenue.subtract(netCogs);
+//        BigDecimal netMarginPct = pct(netProfit, netRevenue);
+//
+//        return RevenueSummaryDto.builder()
+//                .grossRevenue(grossRevenue)
+//                .refundAmount(refundAmount)
+//                .netRevenue(netRevenue)
+//                .vnpayRevenue(vnpayGross)
+//                .codRevenue(codRevenue)
+//                .ordersCount(ordersCount)
+//                .aov(aov)
+//
+//                .grossCogs(grossCogs)
+//                .refundedCogs(refundedCogs)
+//                .netCogs(netCogs)
+//
+//                .grossProfit(grossProfit)
+//                .netProfit(netProfit)
+//                .netMarginPct(netMarginPct)
+//                .build();
+//    }
+
     @Override
     public RevenueSummaryDto getRevenueSummary(RevenueStatsFilter f) {
         LocalDateTime from = requireFrom(f.getFrom());
         LocalDateTime to = requireTo(f.getTo());
 
         // ===== Revenue =====
-        BigDecimal vnpayGross = sumPaymentAmountByPaidAt(PaymentStatus.SUCCESS, PaymentMethod.VNPAY, from, to);
+        BigDecimal vnpayNet = sumPaymentAmountByPaidAt(PaymentStatus.SUCCESS, PaymentMethod.VNPAY, from, to);
         BigDecimal refundAmount =
                 sumPaymentAmountByRefundedAt(PaymentStatus.REFUNDED, PaymentMethod.VNPAY, from, to);
 
@@ -50,11 +116,11 @@ public class AdminStatisticsServiceImpl implements AdminStatisticsService {
             codRevenue = sumCodCompletedOrders(from, to);
         }
 
-        BigDecimal grossRevenue = (f.getMode() == StatsMode.CASHFLOW_VNPAY_ONLY)
-                ? vnpayGross
-                : vnpayGross.add(codRevenue);
+        BigDecimal netRevenue = (f.getMode() == StatsMode.CASHFLOW_VNPAY_ONLY)
+                ? vnpayNet
+                : vnpayNet.add(codRevenue);
 
-        BigDecimal netRevenue = grossRevenue.subtract(refundAmount);
+        BigDecimal grossRevenue = netRevenue.add(refundAmount);
 
         // ===== Orders count (để AOV) =====
         long vnpayOrders = countDistinctOrdersFromPayments(PaymentStatus.SUCCESS, PaymentMethod.VNPAY, from, to);
@@ -69,13 +135,13 @@ public class AdminStatisticsServiceImpl implements AdminStatisticsService {
         BigDecimal vnpayCogs = sumVnpayCogsSuccess(from, to);
         BigDecimal codCogs = (f.getMode() == StatsMode.SALES_ALL) ? sumCodCogsCompleted(from, to) : BigDecimal.ZERO;
 
-        BigDecimal grossCogs = (f.getMode() == StatsMode.CASHFLOW_VNPAY_ONLY)
+        BigDecimal netCogs = (f.getMode() == StatsMode.CASHFLOW_VNPAY_ONLY)
                 ? vnpayCogs
                 : vnpayCogs.add(codCogs);
 
         // refundedCogs hiện tính "approx" theo Payment.createdAt (vì chưa có refundedAt)
         BigDecimal refundedCogs = sumVnpayCogsRefunded(from, to);
-        BigDecimal netCogs = grossCogs.subtract(refundedCogs);
+        BigDecimal grossCogs = netCogs.add(refundedCogs);
 
         // ===== Profit =====
         BigDecimal grossProfit = grossRevenue.subtract(grossCogs);
@@ -86,7 +152,7 @@ public class AdminStatisticsServiceImpl implements AdminStatisticsService {
                 .grossRevenue(grossRevenue)
                 .refundAmount(refundAmount)
                 .netRevenue(netRevenue)
-                .vnpayRevenue(vnpayGross)
+                .vnpayRevenue(vnpayNet.add(refundAmount))
                 .codRevenue(codRevenue)
                 .ordersCount(ordersCount)
                 .aov(aov)
@@ -101,72 +167,153 @@ public class AdminStatisticsServiceImpl implements AdminStatisticsService {
                 .build();
     }
 
-    @Override
-    public RevenueTimeSeriesDto getRevenueTimeSeries(RevenueStatsFilter f) {
-        LocalDateTime from = requireFrom(f.getFrom());
-        LocalDateTime to = requireTo(f.getTo());
+//    @Override
+//    public RevenueTimeSeriesDto getRevenueTimeSeries(RevenueStatsFilter f) {
+//        LocalDateTime from = requireFrom(f.getFrom());
+//        LocalDateTime to = requireTo(f.getTo());
+//
+//        // ===== Daily maps (Revenue) =====
+//        Map<LocalDate, BigDecimal> vnpayByDay = sumPaymentSuccessByDay(from, to);
+//        Map<LocalDate, BigDecimal> refundByDay = sumPaymentRefundByDayApprox(from, to); // approx theo createdAt
+//        Map<LocalDate, BigDecimal> codByDay = (f.getMode() == StatsMode.SALES_ALL)
+//                ? sumCodCompletedByDay(from, to)
+//                : Collections.emptyMap();
+//
+//        // ===== Daily maps (COGS) =====
+//        Map<LocalDate, BigDecimal> vnpayCogsByDay = sumVnpayCogsSuccessByDay(from, to);
+//        Map<LocalDate, BigDecimal> refundCogsByDay = sumVnpayCogsRefundedByDayApprox(from, to);
+//        Map<LocalDate, BigDecimal> codCogsByDay = (f.getMode() == StatsMode.SALES_ALL)
+//                ? sumCodCogsCompletedByDay(from, to)
+//                : Collections.emptyMap();
+//
+//        // Buckets
+//        LocalDate startDate = from.toLocalDate();
+//        LocalDate endExclusive = to.toLocalDate(); // vì to là exclusive (thường là đầu ngày + 1)
+//        List<LocalDate> buckets = generateBuckets(startDate, endExclusive, f.getGroupBy());
+//
+//        List<RevenueTimePointDto> points = new ArrayList<>();
+//        for (LocalDate bucketStart : buckets) {
+//            LocalDate bucketEndExclusive = nextBucketStart(bucketStart, f.getGroupBy());
+//
+//            BigDecimal vnpay = sumBetween(vnpayByDay, bucketStart, bucketEndExclusive);
+//            BigDecimal cod = sumBetween(codByDay, bucketStart, bucketEndExclusive);
+//            BigDecimal refund = sumBetween(refundByDay, bucketStart, bucketEndExclusive);
+//
+//            BigDecimal grossRevenue = (f.getMode() == StatsMode.CASHFLOW_VNPAY_ONLY) ? vnpay : vnpay.add(cod);
+//            BigDecimal netRevenue = grossRevenue.subtract(refund);
+//
+//            BigDecimal vnpayCogs = sumBetween(vnpayCogsByDay, bucketStart, bucketEndExclusive);
+//            BigDecimal codCogs = sumBetween(codCogsByDay, bucketStart, bucketEndExclusive);
+//            BigDecimal refundedCogs = sumBetween(refundCogsByDay, bucketStart, bucketEndExclusive);
+//
+//            BigDecimal grossCogs = (f.getMode() == StatsMode.CASHFLOW_VNPAY_ONLY) ? vnpayCogs : vnpayCogs.add(codCogs);
+//            BigDecimal netCogs = grossCogs.subtract(refundedCogs);
+//
+//            BigDecimal netProfit = netRevenue.subtract(netCogs);
+//            BigDecimal netMarginPct = pct(netProfit, netRevenue);
+//
+//            points.add(RevenueTimePointDto.builder()
+//                    .bucket(bucketStart)
+//                    .vnpayGross(vnpay)
+//                    .codRevenue(cod)
+//                    .refundAmount(refund)
+//                    .netRevenue(netRevenue)
+//
+//                    .grossCogs(grossCogs)
+//                    .refundedCogs(refundedCogs)
+//                    .netCogs(netCogs)
+//
+//                    .netProfit(netProfit)
+//                    .netMarginPct(netMarginPct)
+//                    .build());
+//        }
+//
+//        return RevenueTimeSeriesDto.builder()
+//                .groupBy(f.getGroupBy())
+//                .points(points)
+//                .build();
+//    }
+@Override
+public RevenueTimeSeriesDto getRevenueTimeSeries(RevenueStatsFilter f) {
+    LocalDateTime from = requireFrom(f.getFrom());
+    LocalDateTime to = requireTo(f.getTo());
 
-        // ===== Daily maps (Revenue) =====
-        Map<LocalDate, BigDecimal> vnpayByDay = sumPaymentSuccessByDay(from, to);
-        Map<LocalDate, BigDecimal> refundByDay = sumPaymentRefundByDayApprox(from, to); // approx theo createdAt
-        Map<LocalDate, BigDecimal> codByDay = (f.getMode() == StatsMode.SALES_ALL)
-                ? sumCodCompletedByDay(from, to)
-                : Collections.emptyMap();
+    // ===== Daily maps (Revenue) =====
+    Map<LocalDate, BigDecimal> vnpayNetByDay = sumPaymentSuccessByDay(from, to);
+    Map<LocalDate, BigDecimal> refundByDay = sumPaymentRefundByDayApprox(from, to);
+    Map<LocalDate, BigDecimal> codByDay = (f.getMode() == StatsMode.SALES_ALL)
+            ? sumCodCompletedByDay(from, to)
+            : Collections.emptyMap();
 
-        // ===== Daily maps (COGS) =====
-        Map<LocalDate, BigDecimal> vnpayCogsByDay = sumVnpayCogsSuccessByDay(from, to);
-        Map<LocalDate, BigDecimal> refundCogsByDay = sumVnpayCogsRefundedByDayApprox(from, to);
-        Map<LocalDate, BigDecimal> codCogsByDay = (f.getMode() == StatsMode.SALES_ALL)
-                ? sumCodCogsCompletedByDay(from, to)
-                : Collections.emptyMap();
+    // ===== Daily maps (COGS) =====
+    Map<LocalDate, BigDecimal> vnpayCogsByDay = sumVnpayCogsSuccessByDay(from, to);
+    Map<LocalDate, BigDecimal> refundCogsByDay = sumVnpayCogsRefundedByDayApprox(from, to);
+    Map<LocalDate, BigDecimal> codCogsByDay = (f.getMode() == StatsMode.SALES_ALL)
+            ? sumCodCogsCompletedByDay(from, to)
+            : Collections.emptyMap();
 
-        // Buckets
-        LocalDate startDate = from.toLocalDate();
-        LocalDate endExclusive = to.toLocalDate(); // vì to là exclusive (thường là đầu ngày + 1)
-        List<LocalDate> buckets = generateBuckets(startDate, endExclusive, f.getGroupBy());
+    // Buckets
+    LocalDate startDate = from.toLocalDate();
+    LocalDate endExclusive = to.toLocalDate();
+    List<LocalDate> buckets = generateBuckets(startDate, endExclusive, f.getGroupBy());
 
-        List<RevenueTimePointDto> points = new ArrayList<>();
-        for (LocalDate bucketStart : buckets) {
-            LocalDate bucketEndExclusive = nextBucketStart(bucketStart, f.getGroupBy());
+    List<RevenueTimePointDto> points = new ArrayList<>();
 
-            BigDecimal vnpay = sumBetween(vnpayByDay, bucketStart, bucketEndExclusive);
-            BigDecimal cod = sumBetween(codByDay, bucketStart, bucketEndExclusive);
-            BigDecimal refund = sumBetween(refundByDay, bucketStart, bucketEndExclusive);
+    for (LocalDate bucketStart : buckets) {
+        LocalDate bucketEndExclusive = nextBucketStart(bucketStart, f.getGroupBy());
 
-            BigDecimal grossRevenue = (f.getMode() == StatsMode.CASHFLOW_VNPAY_ONLY) ? vnpay : vnpay.add(cod);
-            BigDecimal netRevenue = grossRevenue.subtract(refund);
+        // ===== Revenue =====
+        BigDecimal vnpayNet = sumBetween(vnpayNetByDay, bucketStart, bucketEndExclusive);
+        BigDecimal refundAmount = sumBetween(refundByDay, bucketStart, bucketEndExclusive);
+        BigDecimal codRevenue = sumBetween(codByDay, bucketStart, bucketEndExclusive);
 
-            BigDecimal vnpayCogs = sumBetween(vnpayCogsByDay, bucketStart, bucketEndExclusive);
-            BigDecimal codCogs = sumBetween(codCogsByDay, bucketStart, bucketEndExclusive);
-            BigDecimal refundedCogs = sumBetween(refundCogsByDay, bucketStart, bucketEndExclusive);
+        BigDecimal vnpayGross = vnpayNet.add(refundAmount);
 
-            BigDecimal grossCogs = (f.getMode() == StatsMode.CASHFLOW_VNPAY_ONLY) ? vnpayCogs : vnpayCogs.add(codCogs);
-            BigDecimal netCogs = grossCogs.subtract(refundedCogs);
+        BigDecimal netRevenue = (f.getMode() == StatsMode.CASHFLOW_VNPAY_ONLY)
+                ? vnpayNet
+                : vnpayNet.add(codRevenue);
 
-            BigDecimal netProfit = netRevenue.subtract(netCogs);
-            BigDecimal netMarginPct = pct(netProfit, netRevenue);
+        // ===== COGS =====
+        BigDecimal vnpayCogs = sumBetween(vnpayCogsByDay, bucketStart, bucketEndExclusive);
+        BigDecimal codCogs = sumBetween(codCogsByDay, bucketStart, bucketEndExclusive);
+        BigDecimal refundedCogs = sumBetween(refundCogsByDay, bucketStart, bucketEndExclusive);
 
-            points.add(RevenueTimePointDto.builder()
-                    .bucket(bucketStart)
-                    .vnpayGross(vnpay)
-                    .codRevenue(cod)
-                    .refundAmount(refund)
-                    .netRevenue(netRevenue)
+        BigDecimal netCogs = (f.getMode() == StatsMode.CASHFLOW_VNPAY_ONLY)
+                ? vnpayCogs
+                : vnpayCogs.add(codCogs);
 
-                    .grossCogs(grossCogs)
-                    .refundedCogs(refundedCogs)
-                    .netCogs(netCogs)
+        BigDecimal grossCogs = netCogs.add(refundedCogs);
 
-                    .netProfit(netProfit)
-                    .netMarginPct(netMarginPct)
-                    .build());
-        }
+        // ===== Profit =====
+        BigDecimal netProfit = netRevenue.subtract(netCogs);
+        BigDecimal netMarginPct = pct(netProfit, netRevenue);
 
-        return RevenueTimeSeriesDto.builder()
-                .groupBy(f.getGroupBy())
-                .points(points)
-                .build();
+        points.add(RevenueTimePointDto.builder()
+                .bucket(bucketStart)
+
+                // Revenue
+                .vnpayGross(vnpayGross)
+                .codRevenue(codRevenue)
+                .refundAmount(refundAmount)
+                .netRevenue(netRevenue)
+
+                // COGS
+                .grossCogs(grossCogs)
+                .refundedCogs(refundedCogs)
+                .netCogs(netCogs)
+
+                // Profit
+                .netProfit(netProfit)
+                .netMarginPct(netMarginPct)
+                .build());
     }
+
+    return RevenueTimeSeriesDto.builder()
+            .groupBy(f.getGroupBy())
+            .points(points)
+            .build();
+}
+
 
     @Override
     public Page<TopProductDto> getTopProducts(RevenueStatsFilter f) {

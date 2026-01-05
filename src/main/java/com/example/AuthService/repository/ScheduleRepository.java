@@ -30,4 +30,10 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
     """)
     int autoMarkSkipped(@Param("todayStart") LocalDateTime todayStart);
 
+    @Query("""
+    SELECT MAX(s.date)
+    FROM Schedule s
+    WHERE s.drugInPrescription.id = :dipId
+    """)
+    LocalDateTime findLastScheduleDate(@Param("dipId") Long dipId);
 }

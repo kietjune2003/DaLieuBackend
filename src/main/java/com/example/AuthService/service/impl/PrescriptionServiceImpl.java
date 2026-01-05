@@ -119,9 +119,16 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         List<Schedule> schedules = new ArrayList<>();
 
         LocalDate start = parseLocalDate(drugReq.getStartDate());
-        LocalDate end = (drugReq.getEndDate() != null && !drugReq.getEndDate().isEmpty())
-                ? parseLocalDate(drugReq.getEndDate())
-                : start.plusDays(7);
+
+        LocalDate end;
+        if (drugReq.getEndDate() != null && !drugReq.getEndDate().isEmpty()) {
+            end = parseLocalDate(drugReq.getEndDate());
+            drugInPres.setEndDate(end); // thuốc theo đợt
+        } else {
+            end = start.plusDays(7);    // window đầu tiên
+            drugInPres.setEndDate(null); // thuốc dài hạn
+        }
+
 
         FrequencyType frequencyType =
                 (drugReq.getFrequencyType() != null) ? drugReq.getFrequencyType() : FrequencyType.DAILY;

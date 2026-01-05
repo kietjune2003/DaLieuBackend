@@ -18,4 +18,5 @@ public interface DrugInPrescriptionRepository extends JpaRepository<DrugInPrescr
             Integer status
     );
     List<DrugInPrescription> findByPrescription(Prescription prescription);
+    List<DrugInPrescription> findByEndDateIsNull();
 }
