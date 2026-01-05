@@ -547,10 +547,7 @@ public class OrderServiceImpl implements OrderService {
                         order.getStatus() != OrderStatus.PAID) {
                     throw new RuntimeException("Không thể ship ở trạng thái " + order.getStatus());
                 }
-                if (order.getStatus() == OrderStatus.PENDING &&
-                        order.getPaymentMethod() == null) {
-                    throw new RuntimeException("Đơn hàng chưa xác nhận thanh toán");
-                }
+
 
                 order.setStatus(OrderStatus.SHIPPED);
                 successIds.add(orderId);
