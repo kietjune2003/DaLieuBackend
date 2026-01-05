@@ -33,6 +33,10 @@ public class Drug {
     @Column(nullable = false)
     @Builder.Default
     private Integer soldQuantity = 0;
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer reservedQuantity = 0;
+
     @OneToMany(mappedBy = "drug", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonManagedReference
     private List<Section> sections = new ArrayList<>();

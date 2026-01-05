@@ -172,6 +172,7 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
+    @Transactional
     public boolean handleVnpayReturn(Map<String, String> params) {
 
         if (!verifySignature(params)) {
@@ -187,6 +188,11 @@ public class PaymentServiceImpl implements PaymentService {
 
         if (payment == null) return false;
 
+        // 🔒 CHỐNG CALLBACK LẶP
+        if (payment.getStatus() == PaymentStatus.SUCCESS) {
+            return true;
+        }
+
         Order order = payment.getOrder();
 
         // ===== CHECK AMOUNT =====
@@ -197,30 +203,28 @@ public class PaymentServiceImpl implements PaymentService {
 
         if (amountFromVnpay != orderAmount) {
             payment.setStatus(PaymentStatus.FAILED);
-            paymentRepository.save(payment);
             return false;
         }
 
         // ===== CHỈ XỬ LÝ KHI SUCCESS =====
         if ("00".equals(responseCode)) {
 
-            // 🔒 CHỐNG CALLBACK LẶP
-            if (payment.getStatus() == PaymentStatus.SUCCESS) {
-                return true;
-            }
-
-            // 🔥 TRỪ KHO
+            // 🔥 TRỪ KHO THEO RESERVE
             for (OrderItem item : order.getItems()) {
                 Drug drug = item.getDrug();
 
-                if (drug.getStockQuantity() < item.getQuantity()) {
-                    throw new RuntimeException("Thuốc hết hàng: " + drug.getName());
+                int reserved = drug.getReservedQuantity();
+                int qty = item.getQuantity();
+
+                if (reserved < qty) {
+                    throw new RuntimeException(
+                            "Dữ liệu kho không hợp lệ cho thuốc: " + drug.getName()
+                    );
                 }
 
-                drug.setStockQuantity(
-                        drug.getStockQuantity() - item.getQuantity()
-                );
-                drugRepository.save(drug);
+                drug.setReservedQuantity(reserved - qty);
+                drug.setStockQuantity(drug.getStockQuantity() - qty);
+                drug.setSoldQuantity(drug.getSoldQuantity() + qty);
             }
 
             // ===== UPDATE PAYMENT =====
@@ -232,17 +236,14 @@ public class PaymentServiceImpl implements PaymentService {
             order.setStatus(OrderStatus.PAID);
             order.setPaymentMethod(PaymentMethod.VNPAY);
 
-            orderRepository.save(order);
-            paymentRepository.save(payment);
-
             return true;
         }
 
         // ===== FAILED =====
         payment.setStatus(PaymentStatus.FAILED);
-        paymentRepository.save(payment);
         return false;
     }
+
 
 
     @Override

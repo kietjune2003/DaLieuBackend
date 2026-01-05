@@ -45,6 +45,7 @@ public class Payment {
 
     private LocalDateTime createdAt;
     private LocalDateTime paidAt;
+    private LocalDateTime refundedAt;
 
     @PrePersist
     public void onCreate() {
