@@ -10,6 +10,7 @@ import com.example.AuthService.enums.PaymentStatus;
 import com.example.AuthService.repository.DrugRepository;
 import com.example.AuthService.repository.OrderRepository;
 import com.example.AuthService.repository.PaymentRepository;
+import com.example.AuthService.service.InventoryService;
 import com.example.AuthService.service.OrderService;
 import com.example.AuthService.service.PaymentService;
 import com.example.AuthService.spec.OrderSpecification;
@@ -40,6 +41,7 @@ public class OrderServiceImpl implements OrderService {
     private final DrugRepository drugRepository;
     private final PaymentRepository paymentRepository;
     private final PaymentService paymentService;
+    private final InventoryService inventoryService;
     @Override
     @Transactional
     public Order createOrder(CreateOrderRequest request, User user) {
@@ -57,8 +59,8 @@ public class OrderServiceImpl implements OrderService {
                 throw new RuntimeException("Số lượng không hợp lệ");
             }
 
-            int available =
-                    drug.getStockQuantity() - drug.getReservedQuantity();
+
+            Integer available = inventoryService.calculateStock(drug.getId()) - drug.getReservedQuantity();
 
             if (available < itemReq.getQuantity()) {
                 throw new RuntimeException(
@@ -66,14 +68,11 @@ public class OrderServiceImpl implements OrderService {
                 );
             }
 
-            // ✅ RESERVE KHO
-            drug.setReservedQuantity(
-                    drug.getReservedQuantity() + itemReq.getQuantity()
-            );
+
+            drug.setReservedQuantity(drug.getReservedQuantity() + itemReq.getQuantity());
 
             BigDecimal unitPrice = drug.getPrice();
-            BigDecimal itemTotal =
-                    unitPrice.multiply(BigDecimal.valueOf(itemReq.getQuantity()));
+            BigDecimal itemTotal = unitPrice.multiply(BigDecimal.valueOf(itemReq.getQuantity()));
 
             OrderItem orderItem = OrderItem.builder()
                     .drug(drug)
@@ -100,6 +99,7 @@ public class OrderServiceImpl implements OrderService {
 
         return orderRepository.save(order);
     }
+
 
     @Override
     @Transactional
@@ -130,80 +130,80 @@ public class OrderServiceImpl implements OrderService {
         return orderRepository.save(order);
     }
 
-    @Transactional
-    @Override
-    public void updateOrderStatus(Long orderId, OrderStatus newStatus, User user) {
-
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy order"));
-
-        OrderStatus current = order.getStatus();
-
-        Payment payment = paymentRepository.findByOrderId(orderId).orElse(null);
-        PaymentMethod method = payment != null ? payment.getMethod() : PaymentMethod.COD;
-
-        boolean isAdminOrMod =
-                user.getRole().getName().equalsIgnoreCase("ADMIN") ||
-                        user.getRole().getName().equalsIgnoreCase("MODERATOR");
-
-        if (!isAdminOrMod) {
-            throw new RuntimeException("Chỉ ADMIN hoặc MODERATOR mới có quyền cập nhật trạng thái");
-        }
-
-        switch (newStatus) {
-
-            case SHIPPED:
-                if (
-                        (current == OrderStatus.PENDING && method == PaymentMethod.COD) ||
-                                (current == OrderStatus.PAID && method == PaymentMethod.VNPAY)
-                ) {
-
-                    // CHỈ COD MỚI TRỪ KHO KHI SHIPPED
-                    if (method == PaymentMethod.COD) {
-                        for (OrderItem item : order.getItems()) {
-                            Drug drug = item.getDrug();
-
-                            if (drug.getStockQuantity() < item.getQuantity()) {
-                                throw new RuntimeException("Thuốc hết hàng: " + drug.getName());
-                            }
-
-                            drug.setStockQuantity(
-                                    drug.getStockQuantity() - item.getQuantity()
-                            );
-                            drugRepository.save(drug);
-                        }
-                    }
-
-                    order.setStatus(OrderStatus.SHIPPED);
-
-                } else {
-                    throw new RuntimeException("Không thể chuyển sang SHIPPED");
-                }
-                break;
-
-            case COMPLETED:
-                if (current == OrderStatus.SHIPPED) {
-                    order.setStatus(OrderStatus.COMPLETED);
-                    for (OrderItem item : order.getItems()) {
-                        Drug drug = item.getDrug();
-
-
-                        drug.setSoldQuantity(
-                                drug.getSoldQuantity() - item.getQuantity()
-                        );
-                        drugRepository.save(drug);
-                    }
-                } else {
-                    throw new RuntimeException("Chỉ đơn SHIPPED mới hoàn tất");
-                }
-                break;
-
-            default:
-                throw new RuntimeException("Không cho phép set trạng thái này");
-        }
-
-        orderRepository.save(order);
-    }
+//    @Transactional
+//    @Override
+//    public void updateOrderStatus(Long orderId, OrderStatus newStatus, User user) {
+//
+//        Order order = orderRepository.findById(orderId)
+//                .orElseThrow(() -> new RuntimeException("Không tìm thấy order"));
+//
+//        OrderStatus current = order.getStatus();
+//
+//        Payment payment = paymentRepository.findByOrderId(orderId).orElse(null);
+//        PaymentMethod method = payment != null ? payment.getMethod() : PaymentMethod.COD;
+//
+//        boolean isAdminOrMod =
+//                user.getRole().getName().equalsIgnoreCase("ADMIN") ||
+//                        user.getRole().getName().equalsIgnoreCase("MODERATOR");
+//
+//        if (!isAdminOrMod) {
+//            throw new RuntimeException("Chỉ ADMIN hoặc MODERATOR mới có quyền cập nhật trạng thái");
+//        }
+//
+//        switch (newStatus) {
+//
+//            case SHIPPED:
+//                if (
+//                        (current == OrderStatus.PENDING && method == PaymentMethod.COD) ||
+//                                (current == OrderStatus.PAID && method == PaymentMethod.VNPAY)
+//                ) {
+//
+//
+//                    if (method == PaymentMethod.COD) {
+//                        for (OrderItem item : order.getItems()) {
+//                            Drug drug = item.getDrug();
+//
+//                            if (drug.getStockQuantity() < item.getQuantity()) {
+//                                throw new RuntimeException("Thuốc hết hàng: " + drug.getName());
+//                            }
+//
+//                            drug.setStockQuantity(
+//                                    drug.getStockQuantity() - item.getQuantity()
+//                            );
+//                            drugRepository.save(drug);
+//                        }
+//                    }
+//
+//                    order.setStatus(OrderStatus.SHIPPED);
+//
+//                } else {
+//                    throw new RuntimeException("Không thể chuyển sang SHIPPED");
+//                }
+//                break;
+//
+//            case COMPLETED:
+//                if (current == OrderStatus.SHIPPED) {
+//                    order.setStatus(OrderStatus.COMPLETED);
+//                    for (OrderItem item : order.getItems()) {
+//                        Drug drug = item.getDrug();
+//
+//
+//                        drug.setSoldQuantity(
+//                                drug.getSoldQuantity() - item.getQuantity()
+//                        );
+//                        drugRepository.save(drug);
+//                    }
+//                } else {
+//                    throw new RuntimeException("Chỉ đơn SHIPPED mới hoàn tất");
+//                }
+//                break;
+//
+//            default:
+//                throw new RuntimeException("Không cho phép set trạng thái này");
+//        }
+//
+//        orderRepository.save(order);
+//    }
 
     @Transactional
     @Override
@@ -218,14 +218,19 @@ public class OrderServiceImpl implements OrderService {
 
         OrderStatus status = order.getStatus();
 
-        // 1️⃣ CHƯA THANH TOÁN → HUỶ LUÔN
         if (status == OrderStatus.PENDING) {
+
+            for (OrderItem item : order.getItems()) {
+                Drug drug = item.getDrug();
+                int qty = item.getQuantity();
+                drug.setReservedQuantity(drug.getReservedQuantity() - qty);
+            }
+
             order.setStatus(OrderStatus.CANCELLED);
             orderRepository.save(order);
             return;
         }
 
-        // 2️⃣ ĐÃ THANH TOÁN → GỬI YÊU CẦU HOÀN
         if (status == OrderStatus.PAID
                 && order.getPaymentMethod() == PaymentMethod.VNPAY) {
 
@@ -243,6 +248,7 @@ public class OrderServiceImpl implements OrderService {
 
         throw new RuntimeException("Không thể huỷ đơn ở trạng thái hiện tại");
     }
+
 
 
 
@@ -405,33 +411,26 @@ public class OrderServiceImpl implements OrderService {
             throw new RuntimeException("Payment không hợp lệ");
         }
 
-        // 1️⃣ GỌI VNPay REFUND
-        boolean refundSuccess =
-                paymentService.callVnPayRefund(payment, admin);
+        boolean refundSuccess = paymentService.callVnPayRefund(payment, admin);
 
         if (!refundSuccess) {
             payment.setStatus(PaymentStatus.REFUND_FAILED);
             throw new RuntimeException("Hoàn tiền thất bại");
         }
 
-        // 2️⃣ HOÀN KHO (ĐẢO NGƯỢC LÚC PAID)
         for (OrderItem item : order.getItems()) {
             Drug drug = item.getDrug();
             int qty = item.getQuantity();
 
-            drug.setStockQuantity(
-                    drug.getStockQuantity() + qty
-            );
-            drug.setSoldQuantity(
-                    drug.getSoldQuantity() - qty
-            );
+
+            drug.setSoldQuantity(drug.getSoldQuantity() - qty);
         }
 
-        // 3️⃣ UPDATE STATUS
         payment.setStatus(PaymentStatus.REFUNDED);
         payment.setRefundedAt(LocalDateTime.now());
         order.setStatus(OrderStatus.REFUNDED);
     }
+
     @Transactional
     @Override
     public void rejectRefund(Long orderId, User admin) {
@@ -455,7 +454,7 @@ public class OrderServiceImpl implements OrderService {
         }
 
         order.setStatus(OrderStatus.PAID);
-        payment.setStatus(PaymentStatus.SUCCESS);
+        payment.setStatus(PaymentStatus.REFUND_FAILED);
     }
 
 
@@ -585,7 +584,7 @@ public class OrderServiceImpl implements OrderService {
                     throw new RuntimeException("Chưa được ship");
                 }
 
-                // 🔥 CHỈ TRỪ KHO CHO COD
+
                 if (order.getPaymentMethod() == PaymentMethod.COD) {
 
                     for (OrderItem item : order.getItems()) {
@@ -600,9 +599,6 @@ public class OrderServiceImpl implements OrderService {
 
                         drug.setReservedQuantity(
                                 drug.getReservedQuantity() - qty
-                        );
-                        drug.setStockQuantity(
-                                drug.getStockQuantity() - qty
                         );
                         drug.setSoldQuantity(
                                 drug.getSoldQuantity() + qty
@@ -644,7 +640,7 @@ public class OrderServiceImpl implements OrderService {
             throw new RuntimeException("Payment không ở trạng thái có thể hoàn");
         }
 
-        // 1️⃣ GỌI VNPAY REFUND
+
         boolean refundSuccess =
                 paymentService.callVnPayRefund(payment, admin);
 
@@ -653,21 +649,18 @@ public class OrderServiceImpl implements OrderService {
             throw new RuntimeException("Hoàn tiền thất bại");
         }
 
-        // 2️⃣ HOÀN KHO (ĐẢO NGƯỢC LÚC PAID)
+
         for (OrderItem item : order.getItems()) {
             Drug drug = item.getDrug();
             int qty = item.getQuantity();
 
-            drug.setStockQuantity(
-                    drug.getStockQuantity() + qty
-            );
             drug.setSoldQuantity(
                     drug.getSoldQuantity() - qty
             );
-            // ❗ reservedQuantity KHÔNG cộng lại
+
         }
 
-        // 3️⃣ UPDATE PAYMENT
+
         payment.setStatus(PaymentStatus.REFUNDED);
     }
 
@@ -688,7 +681,7 @@ public class OrderServiceImpl implements OrderService {
                 Order order = orderRepository.findById(orderId)
                         .orElseThrow(() -> new RuntimeException("Không tồn tại order"));
 
-                // ===== CASE 1: PENDING → CANCELLED (TRẢ RESERVE) =====
+
                 if (order.getStatus() == OrderStatus.PENDING) {
 
                     for (OrderItem item : order.getItems()) {
@@ -711,7 +704,7 @@ public class OrderServiceImpl implements OrderService {
                     continue;
                 }
 
-                // ===== CASE 2: PAID (VNPAY) → REFUND =====
+
                 if (order.getStatus() == OrderStatus.PAID
                         && order.getPaymentMethod() == PaymentMethod.VNPAY) {
 
@@ -722,16 +715,8 @@ public class OrderServiceImpl implements OrderService {
                     continue;
                 }
 
-                // ===== CASE 3: SHIPPED + VNPAY → REFUND =====
-                if (order.getStatus() == OrderStatus.SHIPPED
-                        && order.getPaymentMethod() == PaymentMethod.VNPAY) {
 
-                    refundPaidOrder(order, admin);
 
-                    order.setStatus(OrderStatus.REFUNDED);
-                    successIds.add(orderId);
-                    continue;
-                }
 
                 throw new RuntimeException(
                         "Không thể huỷ đơn ở trạng thái " + order.getStatus()
@@ -767,7 +752,7 @@ public class OrderServiceImpl implements OrderService {
 
         for (Long orderId : orderIds) {
             try {
-                approveRefund(orderId, admin); // 👈 dùng lại hàm có sẵn
+                approveRefund(orderId, admin);
                 successIds.add(orderId);
             } catch (Exception e) {
                 errors.add(BulkOrderError.builder()
@@ -797,7 +782,7 @@ public class OrderServiceImpl implements OrderService {
 
         for (Long orderId : orderIds) {
             try {
-                rejectRefund(orderId, admin); // 👈 hàm bạn đã có
+                rejectRefund(orderId, admin);
                 successIds.add(orderId);
             } catch (Exception e) {
                 errors.add(BulkOrderError.builder()

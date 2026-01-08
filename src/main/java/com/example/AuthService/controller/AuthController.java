@@ -30,9 +30,14 @@ public class AuthController {
 
 
     @PostMapping("/login")
-    public TokenResponse login(@RequestBody Map<String, String> body) {
-        return authService.login(body.get("email"), body.get("password"));
+    public TokenResponse login(@RequestBody LoginRequest body) {
+        return authService.login(
+                body.getEmail(),
+                body.getPassword(),
+                body.getClientView()
+        );
     }
+
 
     @PostMapping("/refresh")
     public TokenResponse refresh(@RequestBody Map<String, String> body) {

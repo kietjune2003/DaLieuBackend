@@ -1,12 +1,14 @@
 package com.example.AuthService.service.impl;
 
 import com.example.AuthService.dto.DrugFilter;
+import com.example.AuthService.dto.response.DrugResponse;
 import com.example.AuthService.entity.Drug;
 import com.example.AuthService.repository.DrugRepository;
 import com.example.AuthService.service.CloudinaryService;
 import com.example.AuthService.service.DrugService;
 
 
+import com.example.AuthService.service.InventoryService;
 import com.example.AuthService.spec.DrugSpecifications;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
@@ -15,12 +17,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class DrugServiceImpl implements DrugService {
     private final DrugRepository drugRepository;
     private final CloudinaryService cloudinaryService;
+    private final InventoryService inventoryService;
     @Override
     public Drug createDrug(Drug drug) {
         if (drug.getSections() != null) {
@@ -71,7 +76,7 @@ public class DrugServiceImpl implements DrugService {
         drug.setTitle(updated.getTitle());
         drug.setPrice(updated.getPrice());
         drug.setImportPrice(updated.getImportPrice());
-        drug.setStockQuantity(updated.getStockQuantity());
+//        drug.setStockQuantity(updated.getStockQuantity());
 
         // 3️⃣ Update sections (nếu có)
         if (updated.getSections() != null) {
@@ -106,8 +111,11 @@ public class DrugServiceImpl implements DrugService {
     }
 
     @Override
-    public Page<Drug> getDrugs(DrugFilter filter, Pageable pageable, boolean isAdmin) {
-
+    public Page<DrugResponse> getDrugs(
+            DrugFilter filter,
+            Pageable pageable,
+            boolean isAdmin
+    ) {
         Pageable effective = (pageable == null || pageable.getSort().isUnsorted())
                 ? PageRequest.of(
                 pageable == null ? 0 : pageable.getPageNumber(),
@@ -116,14 +124,49 @@ public class DrugServiceImpl implements DrugService {
         )
                 : pageable;
 
-        // ⭐ BUSINESS RULE
         if (!isAdmin) {
-            filter.setIsActive(true); // ép USER chỉ thấy thuốc active
+            filter.setIsActive(true);
         }
 
         Specification<Drug> spec = DrugSpecifications.withFilter(filter);
-        return drugRepository.findAll(spec, effective);
+
+        Page<Drug> drugPage =
+                drugRepository.findAll(spec, effective);
+
+        List<Long> drugIds = drugPage.getContent()
+                .stream()
+                .map(Drug::getId)
+                .toList();
+
+        Map<Long, Integer> importedMap =
+                inventoryService.getTotalImportedForDrugs(drugIds);
+
+        return drugPage.map(drug -> {
+            int totalImported =
+                    importedMap.getOrDefault(drug.getId(), 0);
+
+            int sold = drug.getSoldQuantity() != null
+                    ? drug.getSoldQuantity()
+                    : 0;
+
+            int stock = totalImported - sold;
+
+            return DrugResponse.builder()
+                    .id(drug.getId())
+                    .name(drug.getName())
+                    .title(drug.getTitle())
+                    .image(drug.getImage())
+                    .price(drug.getPrice())
+                    .soldQuantity(sold)
+                    .importPrice(drug.getImportPrice())
+                    .isActive(drug.getIsActive())
+                    .stockQuantity(stock)
+                    .build();
+        });
     }
+
+
+
 
 
     @Override

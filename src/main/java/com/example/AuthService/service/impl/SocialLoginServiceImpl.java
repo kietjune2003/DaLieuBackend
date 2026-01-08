@@ -47,10 +47,10 @@ public class SocialLoginServiceImpl implements SocialLoginService {
                 .orElseGet(() -> {
                     Role userRole = roleRepo.findByName("USER")
                             .orElseThrow(() -> new IllegalStateException("Default role 'USER' not found"));
-                    // dùng convenience ctor của entity User bạn đã có
+
                     User u = new User(sub, email, name, picture);
                     u.setRole(userRole);
-                    // các cờ trạng thái đã default = true trong entity
+
                     return userRepo.save(u);
                 });
     }

@@ -22,8 +22,8 @@ public interface OrderService {
     Order createOrder(CreateOrderRequest request, User user);
     Order confirmCodPayment(Long orderId, User user);
 
-    @Transactional
-    void updateOrderStatus(Long orderId, OrderStatus newStatus, User user);
+//    @Transactional
+//    void updateOrderStatus(Long orderId, OrderStatus newStatus, User user);
 
     @Transactional
     void cancelOrder(Long orderId, User user);

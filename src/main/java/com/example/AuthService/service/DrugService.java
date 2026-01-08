@@ -1,6 +1,7 @@
 package com.example.AuthService.service;
 
 import com.example.AuthService.dto.DrugFilter;
+import com.example.AuthService.dto.response.DrugResponse;
 import com.example.AuthService.entity.Drug;
 
 import org.springframework.data.domain.Page;
@@ -23,7 +24,7 @@ public interface DrugService {
     Drug getDrugById(Long id);
     List<Drug> getAllDrugs();
 
-    Page<Drug> getDrugs(DrugFilter filter, Pageable pageable, boolean isAdmin);
+    Page<DrugResponse> getDrugs(DrugFilter filter, Pageable pageable, boolean isAdmin);
 
 
     // Gợi ý tên

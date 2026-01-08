@@ -52,7 +52,7 @@ public class DrugSpecifications {
                     }
                 }
 
-                // ⭐ THÊM DÒNG NÀY
+
                 if (f.getIsActive() != null) {
                     ps.add(cb.equal(root.get("isActive"), f.getIsActive()));
                 }

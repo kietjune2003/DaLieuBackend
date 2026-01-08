@@ -2,6 +2,7 @@ package com.example.AuthService.controller;
 
 import com.example.AuthService.dto.DrugFilter; // giữ nguyên import theo file bạn đang dùng
 import com.example.AuthService.dto.request.UpdateDrugActiveRequest;
+import com.example.AuthService.dto.response.DrugResponse;
 import com.example.AuthService.entity.Drug;
 import com.example.AuthService.service.DrugService;
 
@@ -34,7 +35,7 @@ public class DrugController {
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('USER','MODERATOR','ADMIN')")
-    public ResponseEntity<Page<Drug>> list(
+    public ResponseEntity<Page<DrugResponse>> list(
             @RequestParam(required = false) String q,
             @RequestParam(required = false) BigDecimal minPrice,
             @RequestParam(required = false) BigDecimal maxPrice,
@@ -43,23 +44,21 @@ public class DrugController {
             @PageableDefault(size = 20, sort = "id") Pageable pageable,
             Authentication authentication
     ) {
-        DrugFilter f = new DrugFilter();
-        f.setQ(q);
-        f.setMinPrice(minPrice);
-        f.setMaxPrice(maxPrice);
-        f.setInStock(inStock);
-        f.setHasImage(hasImage);
+        DrugFilter filter = new DrugFilter();
+        filter.setQ(q);
+        filter.setMinPrice(minPrice);
+        filter.setMaxPrice(maxPrice);
+        filter.setInStock(inStock);
+        filter.setHasImage(hasImage);
 
         boolean isAdmin = authentication.getAuthorities().stream()
-                .anyMatch(a ->
-                        a.getAuthority().equals("ROLE_ADMIN") ||
-                                a.getAuthority().equals("ROLE_MODERATOR")
-                );
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ROLE_MODERATOR"));
 
-        return ResponseEntity.ok(
-                drugService.getDrugs(f, pageable, isAdmin)
-        );
+        Page<DrugResponse> drugResponses = drugService.getDrugs(filter, pageable, isAdmin);
+
+        return ResponseEntity.ok(drugResponses);
     }
+
 
 
     /**

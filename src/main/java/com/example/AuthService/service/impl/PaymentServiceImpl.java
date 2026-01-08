@@ -188,7 +188,7 @@ public class PaymentServiceImpl implements PaymentService {
 
         if (payment == null) return false;
 
-        // 🔒 CHỐNG CALLBACK LẶP
+
         if (payment.getStatus() == PaymentStatus.SUCCESS) {
             return true;
         }
@@ -206,7 +206,7 @@ public class PaymentServiceImpl implements PaymentService {
             return false;
         }
 
-        // ===== CHỈ XỬ LÝ KHI SUCCESS =====
+
         if ("00".equals(responseCode)) {
 
             // 🔥 TRỪ KHO THEO RESERVE
@@ -223,16 +223,15 @@ public class PaymentServiceImpl implements PaymentService {
                 }
 
                 drug.setReservedQuantity(reserved - qty);
-                drug.setStockQuantity(drug.getStockQuantity() - qty);
                 drug.setSoldQuantity(drug.getSoldQuantity() + qty);
             }
 
-            // ===== UPDATE PAYMENT =====
+
             payment.setStatus(PaymentStatus.SUCCESS);
             payment.setVnpTransactionNo(transactionNo);
             payment.setPaidAt(LocalDateTime.now());
 
-            // ===== UPDATE ORDER =====
+
             order.setStatus(OrderStatus.PAID);
             order.setPaymentMethod(PaymentMethod.VNPAY);
 
@@ -277,25 +276,19 @@ public class PaymentServiceImpl implements PaymentService {
             return false;
         }
 
-        // ===== CHỈ XỬ LÝ KHI SUCCESS =====
+
         if ("00".equals(responseCode)) {
 
-            // 🔒 CHỐNG CALLBACK LẶP
+
             if (payment.getStatus() == PaymentStatus.SUCCESS) {
                 return true;
             }
 
-            // 🔥 TRỪ KHO
+
             for (OrderItem item : order.getItems()) {
                 Drug drug = item.getDrug();
 
-                if (drug.getStockQuantity() < item.getQuantity()) {
-                    throw new RuntimeException("Thuốc hết hàng: " + drug.getName());
-                }
 
-                drug.setStockQuantity(
-                        drug.getStockQuantity() - item.getQuantity()
-                );
                 drugRepository.save(drug);
             }
 

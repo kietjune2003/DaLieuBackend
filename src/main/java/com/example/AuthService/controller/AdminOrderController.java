@@ -55,19 +55,19 @@ public class AdminOrderController {
 
 
 
-    @PutMapping("/{orderId}/status")
-    @PreAuthorize("isAuthenticated()") // user hoặc admin
-    public ResponseEntity<?> updateOrderStatus(
-            @PathVariable Long orderId,
-            @RequestParam OrderStatus status,
-            @AuthenticationPrincipal UserDetails userDetails) {
-
-        User user = userRepository.findByEmail(userDetails.getUsername())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
-
-        orderService.updateOrderStatus(orderId, status, user);
-        return ResponseEntity.ok("Order cập nhật trạng thái: " + status);
-    }
+//    @PutMapping("/{orderId}/status")
+//    @PreAuthorize("isAuthenticated()") // user hoặc admin
+//    public ResponseEntity<?> updateOrderStatus(
+//            @PathVariable Long orderId,
+//            @RequestParam OrderStatus status,
+//            @AuthenticationPrincipal UserDetails userDetails) {
+//
+//        User user = userRepository.findByEmail(userDetails.getUsername())
+//                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
+//
+//        orderService.updateOrderStatus(orderId, status, user);
+//        return ResponseEntity.ok("Order cập nhật trạng thái: " + status);
+//    }
     @PutMapping("/{orderId}/approve-refund")
     public ResponseEntity<?> approveRefundSingle(
             @PathVariable Long orderId,

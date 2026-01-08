@@ -1,7 +1,6 @@
 package com.example.AuthService.service.impl;
 
 import com.example.AuthService.dto.request.*;
-import com.example.AuthService.dto.response.ApiResponse;
 import com.example.AuthService.dto.response.TokenResponse;
 import com.example.AuthService.entity.Country;
 import com.example.AuthService.entity.Role;
@@ -38,12 +37,14 @@ public class AuthServiceImpl implements AuthService {
     private final OtpService otpService;
     private final ObjectMapper objectMapper;
 
-    // ===== Password login / refresh =====
     @Override
-    public TokenResponse login(String emailRaw, String password) {
+    public TokenResponse login(String emailRaw, String password, String clientView) {
         String email = normalize(emailRaw);
+
         try {
-            authManager.authenticate(new UsernamePasswordAuthenticationToken(email, password));
+            authManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(email, password)
+            );
         } catch (BadCredentialsException e) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Bad credentials");
         } catch (DisabledException e) {
@@ -54,8 +55,25 @@ public class AuthServiceImpl implements AuthService {
 
         User user = userRepo.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
-        return new TokenResponse(jwt.generateAccessToken(user), jwt.generateRefreshToken(user.getUsername()));
+
+        if ("ADMIN".equals(clientView)) {
+            boolean isAdmin = user.getRole().
+                    getName().equals("ADMIN");
+
+            if (!isAdmin) {
+                throw new ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "Only ADMIN can login to admin view"
+                );
+            }
+        }
+
+        return new TokenResponse(
+                jwt.generateAccessToken(user),
+                jwt.generateRefreshToken(user.getUsername())
+        );
     }
+
 
     @Override
     public TokenResponse refresh(String refreshToken) {

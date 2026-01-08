@@ -6,7 +6,10 @@ import com.example.AuthService.dto.response.TokenResponse;
 import com.example.AuthService.entity.User;
 
 public interface AuthService {
-    TokenResponse login(String email, String password);
+
+
+    TokenResponse login(String emailRaw, String password, String clientView);
+
     TokenResponse refresh(String refreshToken);
 
     void registerStart(RegisterStartRequest req);

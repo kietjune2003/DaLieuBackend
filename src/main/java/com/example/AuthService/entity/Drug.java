@@ -28,8 +28,8 @@ public class Drug {
     private BigDecimal price;
     @Column(nullable = false)
     private BigDecimal importPrice;
-    @Column(nullable = false)
-    private Integer stockQuantity;
+//    @Column(nullable = false)
+//    private Integer stockQuantity;
     @Column(nullable = false)
     @Builder.Default
     private Integer soldQuantity = 0;
