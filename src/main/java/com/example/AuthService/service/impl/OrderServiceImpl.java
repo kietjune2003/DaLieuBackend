@@ -715,7 +715,15 @@ public class OrderServiceImpl implements OrderService {
                     continue;
                 }
 
+                if (order.getStatus() == OrderStatus.SHIPPED
+                        && order.getPaymentMethod() == PaymentMethod.VNPAY) {
 
+                    refundPaidOrder(order, admin);
+
+                    order.setStatus(OrderStatus.REFUNDED);
+                    successIds.add(orderId);
+                    continue;
+                }
 
 
                 throw new RuntimeException(
